@@ -1,0 +1,333 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <sys/time.h>
+#include <netdb.h>
+#include <errno.h>
+#include "nest/bird.h"
+#include <lib/cJSON.h>
+#include <nest/protocol.h>
+#include <proto/bgp/bgp.h>
+int msg_count = 0;
+byte *
+insert_u16(byte *buf, uint val)
+{
+  put_u16(buf, val);
+  return buf + 2;
+}
+byte *
+insert_u8(byte *buf, uint val)
+{
+  put_u8(buf, val);
+  return buf + 1;
+}
+static void
+put_af3(byte *buf, u32 id)
+{
+  put_u16(buf, id >> 16);
+  buf[2] = id & 0xff;
+}
+byte *
+insert_json_key(byte* pos,cJSON *input_json, char* key)
+{
+  char input[1024];
+  bsprintf(input, cJSON_GetObjectItem(input_json,key)->valuestring);
+  log("inserting %s", input);
+  char *token;
+  token = strtok(input, ",");
+  while (token != NULL){
+      pos = insert_u8(pos, atoi(token));
+      token = strtok(NULL, ",");
+    }
+    return pos;
+}
+static inline int
+bgp_put_attr_hdr(byte *buf, uint code, uint flags, uint len)
+{
+  if (len < 256) {
+    *buf++ = flags & ~BAF_EXT_LEN;
+    *buf++ = code;
+    *buf++ = len;
+    return 3;
+    }
+  else {
+    *buf++ = flags | BAF_EXT_LEN;
+    *buf++ = code;
+    put_u16(buf, len);
+    return 4;
+    }
+}
+int 
+bird_send(struct bgp_proto *p,cJSON* input_json){
+    struct bgp_conn *conn = p->conn;
+       if (conn == NULL) {
+          log("no conn"); // connection not ready
+          return 2;
+    }
+    byte *current, *end,*buf_start,*buf_end;
+    uint type;
+    sock *sk = conn->sk;
+    buf_start = sk->tbuf;
+    buf_end = buf_start +(bgp_max_packet_length(conn) - BGP_HEADER_LENGTH);
+    current = buf_start + BGP_HEADER_LENGTH;
+    type = conn->packets_to_send;
+    struct lp_state tmpp;
+    lp_save(tmp_linpool, &tmpp);// save local linpool state
+
+
+    struct bgp_channel *c= proto_find_channel_by_name(p, "rpdp4");
+
+    struct bgp_write_state s = {
+        .proto = p,
+        .channel =c,
+        .pool = tmp_linpool,
+        .mp_reach = (c->afi != BGP_AF_IPV4) || c->ext_next_hop, // mutiple protocol reach
+        .as4_session = p->as4_session,
+        .add_path = c->add_path_tx,
+        .mpls = c->desc->mpls,
+      };
+      current = insert_json_key(current, input_json, "withdraws");
+        byte *attrs_start = current;
+        insert_u8(attrs_start+2, BAF_OPTIONAL | BAF_EXT_LEN);//flag
+        // start of  SAV attribute
+        insert_u8(attrs_start+3, BA_MP_REACH_NLRI);//code
+        put_af3(attrs_start+6, BGP_AF_RPDP4);//afi (2 for AFI and 1 for SAFI)
+        current =attrs_start+9;
+        // insert next_hop
+        current = insert_json_key(current, input_json, "next_hop");
+        current = insert_u8(current, 0);//reserve
+        // begin of standard mp reach nlri field
+        // //insert sav_origin
+        current = insert_json_key(current, input_json, "sav_origin");
+        // insert sav_scope
+        current = insert_json_key(current, input_json, "sav_scope");
+        int is_interior = cJSON_GetObjectItem(input_json, "is_interior")->valueint;
+        if (is_interior==0) {
+            // TODO add intra path here
+        }
+        // insert nlri
+        current = insert_json_key(current, input_json, "sav_nlri");
+
+        
+        // end of standard mp reach nlri field
+        put_u16(attrs_start+4,(current-attrs_start)-6);
+
+        // insert origin
+        current += bgp_put_attr_hdr(current, BA_ORIGIN, 64, 1);
+        current = insert_u8(current, p->is_interior); 
+        // insert as_path
+        if (is_interior==1){
+            current += bgp_put_attr_hdr(current, BA_AS_PATH, 80, cJSON_GetObjectItem(input_json,"as_path_len")->valueint);// here set the length to 0 and overwite it latter
+            current = insert_json_key(current, input_json, "as_path");
+        }
+        // end of SAV attribute
+
+        // insert attr length
+        put_u16(attrs_start, (current-attrs_start)-2);
+    
+    // bgp tailing 
+    end = current;
+    
+    log("rpdp update packet assembled");
+    p->stats.tx_updates++;
+    lp_restore(tmp_linpool, &tmpp);
+  
+    uint len = end - buf_start;
+    
+    log("packet len %d", len);
+
+    conn->bgp->stats.tx_messages++;
+    conn->bgp->stats.tx_bytes += len;
+    memset(buf_start, 0xff, 16); /* Marker */
+    put_u16(buf_start + 16, len);
+    buf_start[18] = PKT_UPDATE;
+
+    int socket_result = sk_send(sk, len);
+    log("call agent send result, %d", socket_result);
+    return 0;
+}
+
+void  send_request(char info[], char reply[])
+{
+    struct sockaddr_in server;
+    struct timeval timeout = {10, 0};
+    struct hostent *hp;
+    char ip[20] = {0};
+    char *hostname = "localhost";
+    int sockfd;
+    char req_str[1024];
+    int size_recv, total_size = 0;
+    int len;
+    char slen[32];
+    char chunk[512];
+    cJSON* info_json = cJSON_Parse(info);
+    if(info_json == NULL) {
+      cJSON_Delete(info_json);
+      bsprintf(reply, "{\"code\":\"5005\",\"msg\":\"Invalid Json String\"}");
+      return;
+        }
+    char *msg_type = cJSON_GetObjectItem(info_json,"msg_type")->valuestring;
+
+
+    memset(req_str, 0x00, sizeof(req_str));
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if(sockfd == -1)  {
+      cJSON_Delete(info_json);
+      bsprintf(reply, "{\"code\":\"5001\",\"msg\":\"could not create socket\"}");
+      return;
+        }
+    if((hp=gethostbyname(hostname)) == NULL)
+    {   
+        close(sockfd);
+        cJSON_Delete(info_json);
+        bsprintf(reply, "{\"code\":\"5002\",\"msg\":\"could not get host name\"}");
+        return;
+    }
+
+    strcpy(ip, inet_ntoa(*(struct in_addr *)hp->h_addr_list[0]));
+
+    server.sin_addr.s_addr = inet_addr(ip);
+    server.sin_family = AF_INET;
+    server.sin_port = htons(8888);
+
+    /*connect server*/
+    if(connect(sockfd, (struct sockaddr *)&server, sizeof(server)) < 0){
+                cJSON_Delete(info_json);
+                bsprintf(reply, "{\"code\":\"5003\",\"msg\":\"could not connect server\"}");
+                return;
+    }
+
+    /*http POST request*/
+    strcpy(req_str, "POST /bird_bgp_upload/ HTTP/1.1\r\n");
+    strcat(req_str, "Host: localhost\r\n");
+    strcat(req_str, "Content-Type: application/json\r\n");
+    strcat(req_str, "Content-Length: ");
+    len = strlen(info);
+    sprintf(slen, "%d", len);
+    strcat(req_str, slen);
+    strcat(req_str, "\r\n");
+    strcat(req_str, "\r\n");
+    strcat(req_str, info);
+    /*send data*/
+    if(send(sockfd, req_str, strlen(req_str) , 0) < 0)
+    {
+        close(sockfd);
+        cJSON_Delete(info_json);
+        bsprintf(reply, "{\"code\":\"5004\",\"req_str\":\"could not send data\"}");
+        return;
+    }
+
+    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(struct timeval));
+
+    while(1)
+    {
+        memset(chunk, 0x00, 512);
+
+        /*receive data*/
+        if((size_recv=recv(sockfd, chunk, 512, 0)) == -1)
+        {   
+            if(errno == EWOULDBLOCK || errno == EAGAIN)
+            {
+                break;
+            }
+            else if(errno == EINTR)
+            {
+                continue;
+            }
+            else if(errno == ENOENT)
+            {
+                break;
+            }
+            else if (errno == EBADMSG)
+            {   
+                close(sockfd);
+                bsprintf(reply, "{\"code\":\"5006\",\"req_str\":\"could not receive data\",\"err_code\":%d}", errno);
+                cJSON_Delete(info_json);
+                return ;
+            }
+            else{
+                bsprintf(reply, "{\"code\":\"5006\",\"req_str\":\"could not receive data\",\"err_code\":%d}", errno);
+                cJSON_Delete(info_json);
+                return ;
+            }
+        }
+        else if(size_recv == 0)
+        {
+            break;
+        }
+        else
+        {
+            total_size += size_recv;
+            if ( chunk != NULL )
+            {
+                strcat(reply, chunk);
+            }
+        }
+    }
+    close(sockfd);
+    cJSON_Delete(info_json);
+    if (reply == NULL){
+        bsprintf(reply,"{\"code\":\"5007\",\"req_str\":\"result\"}");
+        return;
+    }
+    char *body = strstr(reply,"{"); //since all http body should be a valid json string, should start with {
+    if (body) { 
+        bsprintf(reply,body);
+        }
+    return;
+}
+
+int rpdp_process(cJSON* msg_json){
+    char proto_name[20] = "";
+    bsprintf(proto_name, "%s",cJSON_GetObjectItem(msg_json,"protocol_name")->valuestring);
+    struct proto *P;
+    WALK_LIST(P, proto_list){
+        if ((P->proto == &proto_bgp) && (P->proto_state != PS_DOWN)){
+            struct bgp_proto *p = (void *) P;
+            if (strcmp(P->name,proto_name)==0)
+                 return bird_send(p, msg_json);
+        }
+    }
+    log("protocol not found: %s", proto_name);
+}
+    
+void send_to_agent(char msg[]){
+    //1: missing key code
+    //0: good
+    
+    char server_reply[1024] = "";
+    send_request(msg,server_reply);
+    int return_code = 1;
+    cJSON* reply_json = cJSON_Parse(server_reply);
+    if (!cJSON_HasObjectItem(reply_json, "code")) goto done;
+    char *msg_type = cJSON_GetObjectItem(reply_json, "code")->valuestring;
+    if (strcmp(msg_type, "0000") == 0){
+        return_code = 0;
+        goto done;
+        }
+    else if (strcmp(msg_type, "2000")==0){
+        {
+            log("SavAgent reply %s", server_reply);
+            return_code = rpdp_process(cJSON_GetObjectItem(reply_json, "data"));
+            goto done;
+        }
+    } else {
+        return_code = 3;
+        goto done;
+        }
+done:
+    cJSON_Delete(reply_json);
+    switch (return_code)    {
+    case 0:
+        return;
+    default:
+        log("error code: %d", return_code);
+        log("req_msg: %s",msg);
+        if (server_reply!= NULL)
+            log("rep_msg: [%s]",server_reply);
+        return;
+    }
+}
