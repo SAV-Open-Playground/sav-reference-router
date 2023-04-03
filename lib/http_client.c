@@ -319,7 +319,10 @@ void send_to_agent(char msg[]){
         goto done;
         }
 done:
-    cJSON_Delete(reply_json);
+    if (reply_json != NULL)
+    {
+        cJSON_Delete(reply_json);
+        }
     switch (return_code)    {
     case 0:
         return;
