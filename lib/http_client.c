@@ -263,6 +263,9 @@ void  send_request(char info[], char reply[])
             total_size += size_recv;
             if ( chunk != NULL )
             {
+                // log("start chunk");
+                // log(chunk);
+                // log("end chunk");
                 strcat(reply, chunk);
             }
         }
@@ -273,10 +276,13 @@ void  send_request(char info[], char reply[])
         bsprintf(reply,"{\"code\":\"5007\",\"req_str\":\"result\"}");
         return;
     }
-    char *body = strstr(reply,"{"); //since all http body should be a valid json string, should start with {
-    if (body) { 
-        bsprintf(reply,body);
-        }
+    char *head_s = strstr(reply,"HTTP"); 
+    char *head_e = strstr(reply,"\n\r");
+    while (head_s != NULL){
+        bsprintf(reply,head_e);
+        head_s = strstr(reply,"HTTP");
+        head_e = strstr(reply,"\n\r");
+    }
     return;
 }
 
@@ -298,7 +304,7 @@ void send_to_agent(char msg[]){
     //1: missing key code
     //0: good
     
-    char server_reply[1024] = "";
+    char server_reply[2048] = "";
     send_request(msg,server_reply);
     int return_code = 1;
     cJSON* reply_json = cJSON_Parse(server_reply);

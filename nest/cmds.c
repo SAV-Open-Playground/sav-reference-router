@@ -47,7 +47,7 @@ cmd_show_status(void)
 void
 call_agent(void)
 {
- log("call_agent");
+ log("cmd call_agent received");
  cli_msg(0, "");
  send_to_agent("{\"msg_type\":\"request_cmd\",\"msg\":\"\"}");
 }
