@@ -280,7 +280,7 @@ char * send_request(char info[])
             total_size += size_recv;
             if (total_size > 512){
                 reply_size = reply_size + 512;
-                reply = (char *) realloc(reply,  reply_size);
+                reply = (char *) realloc(reply,  reply_size*sizeof(char));
             }
             if ( chunk != NULL )
             {
