@@ -150,7 +150,8 @@ bird_send(struct bgp_proto *p,cJSON* input_json){
     return 0;
 }
 
-void  send_request(char info[], char reply[])
+// void  send_request(char info[], char reply[])
+char * send_request(char info[])
 {
     struct sockaddr_in server;
     struct timeval timeout = {10, 0};
@@ -158,33 +159,40 @@ void  send_request(char info[], char reply[])
     char ip[20] = {0};
     char *hostname = "localhost";
     int sockfd;
-    char req_str[1024];
+    char header_str[512];
     int size_recv, total_size = 0;
     int len;
     char slen[32];
     char chunk[512];
+    int header_len;
+    int body_len;
+    int request_len;
+    char *req_str = NULL;
     cJSON* info_json = cJSON_Parse(info);
+    int reply_size = 1024;
+    char *reply = (char *) calloc(reply_size, sizeof(char));
+
     if(info_json == NULL) {
       cJSON_Delete(info_json);
       bsprintf(reply, "{\"code\":\"5005\",\"msg\":\"Invalid Json String\"}");
-      return;
+      return reply;
         }
     char *msg_type = cJSON_GetObjectItem(info_json,"msg_type")->valuestring;
 
 
-    memset(req_str, 0x00, sizeof(req_str));
+    memset(header_str, 0x00, sizeof(header_str));
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if(sockfd == -1)  {
       cJSON_Delete(info_json);
       bsprintf(reply, "{\"code\":\"5001\",\"msg\":\"could not create socket\"}");
-      return;
+      return reply;
         }
     if((hp=gethostbyname(hostname)) == NULL)
     {   
         close(sockfd);
         cJSON_Delete(info_json);
         bsprintf(reply, "{\"code\":\"5002\",\"msg\":\"could not get host name\"}");
-        return;
+        return reply;
     }
 
     strcpy(ip, inet_ntoa(*(struct in_addr *)hp->h_addr_list[0]));
@@ -197,19 +205,26 @@ void  send_request(char info[], char reply[])
     if(connect(sockfd, (struct sockaddr *)&server, sizeof(server)) < 0){
                 cJSON_Delete(info_json);
                 bsprintf(reply, "{\"code\":\"5003\",\"msg\":\"could not connect server\"}");
-                return;
+                return reply;
     }
 
     /*http POST request*/
-    strcpy(req_str, "POST /bird_bgp_upload/ HTTP/1.1\r\n");
-    strcat(req_str, "Host: localhost\r\n");
-    strcat(req_str, "Content-Type: application/json\r\n");
-    strcat(req_str, "Content-Length: ");
+    strcpy(header_str, "POST /bird_bgp_upload/ HTTP/1.1\r\n");
+    strcat(header_str, "Host: localhost\r\n");
+    strcat(header_str, "Content-Type: application/json\r\n");
+    strcat(header_str, "Content-Length: ");
     len = strlen(info);
     sprintf(slen, "%d", len);
-    strcat(req_str, slen);
-    strcat(req_str, "\r\n");
-    strcat(req_str, "\r\n");
+    strcat(header_str, slen);
+    strcat(header_str, "\r\n");
+    strcat(header_str, "\r\n");
+    // strcat(req_str, info);
+
+    header_len = strlen(header_str);
+    body_len = strlen(info);
+    request_len = header_len + body_len + 256;
+    req_str = (char *)calloc(request_len, sizeof(char));
+    strcpy(req_str, header_str);
     strcat(req_str, info);
     /*send data*/
     if(send(sockfd, req_str, strlen(req_str) , 0) < 0)
@@ -217,8 +232,10 @@ void  send_request(char info[], char reply[])
         close(sockfd);
         cJSON_Delete(info_json);
         bsprintf(reply, "{\"code\":\"5004\",\"req_str\":\"could not send data\"}");
-        return;
+        return reply;
     }
+    free(req_str);
+    req_str = NULL;
 
     setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(struct timeval));
 
@@ -246,12 +263,12 @@ void  send_request(char info[], char reply[])
                 close(sockfd);
                 bsprintf(reply, "{\"code\":\"5006\",\"req_str\":\"could not receive data\",\"err_code\":%d}", errno);
                 cJSON_Delete(info_json);
-                return ;
+                return reply;
             }
             else{
                 bsprintf(reply, "{\"code\":\"5006\",\"req_str\":\"could not receive data\",\"err_code\":%d}", errno);
                 cJSON_Delete(info_json);
-                return ;
+                return reply;
             }
         }
         else if(size_recv == 0)
@@ -261,6 +278,10 @@ void  send_request(char info[], char reply[])
         else
         {
             total_size += size_recv;
+            if (total_size > 512){
+                reply_size = reply_size + 512;
+                reply = (char *) realloc(reply,  reply_size);
+            }
             if ( chunk != NULL )
             {
                 // log("start chunk");
@@ -274,7 +295,7 @@ void  send_request(char info[], char reply[])
     cJSON_Delete(info_json);
     if (reply == NULL){
         bsprintf(reply,"{\"code\":\"5007\",\"req_str\":\"result\"}");
-        return;
+        return reply;
     }
     char *head_s = strstr(reply,"HTTP"); 
     char *head_e = strstr(reply,"\n\r");
@@ -283,7 +304,7 @@ void  send_request(char info[], char reply[])
         head_s = strstr(reply,"HTTP");
         head_e = strstr(reply,"\n\r");
     }
-    return;
+    return reply;
 }
 
 int rpdp_process(cJSON* msg_json){
@@ -303,9 +324,8 @@ int rpdp_process(cJSON* msg_json){
 void send_to_agent(char msg[]){
     //1: missing key code
     //0: good
-    
-    char server_reply[2048] = "";
-    send_request(msg,server_reply);
+    char *server_reply = NULL;
+    server_reply = send_request(msg);
     int return_code = 1;
     cJSON* reply_json = cJSON_Parse(server_reply);
     if (!cJSON_HasObjectItem(reply_json, "code")) goto done;
@@ -324,6 +344,8 @@ void send_to_agent(char msg[]){
         return_code = 3;
         goto done;
         }
+    free(server_reply);
+    server_reply = NULL;
 done:
     if (reply_json != NULL)
     {
@@ -339,4 +361,6 @@ done:
             log("rep_msg: [%s]",server_reply);
         return;
     }
+    free(server_reply);
+    server_reply = NULL;
 }
