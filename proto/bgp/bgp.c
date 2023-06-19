@@ -301,6 +301,10 @@ void send_bgp_config(struct bgp_proto *bgp) {
       strcat(channel, "rpdp6");
     else if (c->afi == BGP_AF_RPDP4)
       strcat(channel, "rpdp4");
+    else if (c->afi == BGP_AF_IPV4)
+      strcat(channel, "ipv4");
+    else if (c->afi == BGP_AF_IPV4)
+      strcat(channel, "ipv6");
   }
   if (strcmp(channel, "") == 0)
     return; // not a rpdp channel

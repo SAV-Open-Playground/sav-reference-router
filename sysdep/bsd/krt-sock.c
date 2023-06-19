@@ -166,8 +166,29 @@ krt_capable(rte *e)
 #endif
 
 struct ks_msg
+// kernel socket message
 {
   struct rt_msghdr rtm;
+  // routing table message header
+  //struct rt_msghdr {
+// 	u_short	rtm_msglen;	/* to skip over non-understood messages */
+// 	u_char	rtm_version;	/* future binary compatibility */
+// 	u_char	rtm_type;	/* message type */
+// 	u_short	rtm_hdrlen;	/* sizeof(rt_msghdr) to skip over the header */
+// 	u_short	rtm_index;	/* index for associated ifp */
+// 	u_short rtm_tableid;	/* routing table id */
+// 	u_char	rtm_priority;	/* routing priority */
+// 	u_char	rtm_mpls;	/* MPLS additional infos */
+// 	int	rtm_addrs;	/* bitmask identifying sockaddrs in msg */
+// 	int	rtm_flags;	/* flags, incl. kern & message, e.g. DONE */
+// 	int	rtm_fmask;	/* bitmask used in RTM_CHANGE message */
+// 	pid_t	rtm_pid;	/* identify sender */
+// 	int	rtm_seq;	/* for sender to identify action */
+// 	int	rtm_errno;	/* why failed */
+// 	u_int	rtm_inits;	/* which metrics we are initializing */
+// 	struct	rt_metrics rtm_rmx; /* metrics themselves */
+// };
+
   struct sockaddr_storage buf[RTAX_MAX];
 } PACKED;
 
@@ -399,10 +420,10 @@ krt_assume_onlink(struct iface *iface, int ipv6)
 static void
 krt_read_route(struct ks_msg *msg, struct krt_proto *p, int scan)
 {
-  /* p is NULL iff KRT_SHARED_SOCKET and !scan */
+  /* p is NULL if KRT_SHARED_SOCKET and !scan */
 
   int ipv6;
-  rte *e;
+  rte *e; // route table entry?
   net *net;
   sockaddr dst, gate, mask;
   ip_addr idst, igate, imask;
@@ -816,9 +837,9 @@ krt_read_addr(struct ks_msg *msg, int scan)
     net_fill_ipa(&ifa.prefix, ifa.ip, (ipv6 ? IP6_MAX_PREFIX_LENGTH : IP4_MAX_PREFIX_LENGTH));
     ifa.flags |= IA_HOST;
   }
-
+  // apply changes from internal to kernel
   if (new)
-    ifa_update(&ifa);
+    ifa_update(&ifa); 
   else
     ifa_delete(&ifa);
 
@@ -865,6 +886,7 @@ static struct proto *krt_buffer_owner;
 static byte *
 krt_buffer_update(struct proto *p, size_t *needed)
 {
+
   size_t req = *needed;
 
   if ((req > krt_buflen) ||
@@ -900,8 +922,11 @@ krt_buffer_release(struct proto *p)
 static void
 krt_sysctl_scan(struct proto *p, int cmd, int table_id)
 {
+  // protocol pointer, command and table id.
   byte *buf, *next;
-  int mib[7], mcnt;
+  int mib[7], mcnt; 
+  // mcnt means memory count.
+  //  mib is memory information block. stores
   size_t needed;
   struct ks_msg *m;
   int retries = 3;
@@ -949,8 +974,19 @@ krt_sysctl_scan(struct proto *p, int cmd, int table_id)
     goto exit;
 
   buf = krt_buffer_update(p, &needed);
+    // make sure that the buffer is big enough
 
   rv = sysctl(mib, mcnt, buf, &needed, NULL, 0);
+  // sysctl read/write the kernel parameters.
+//   struct __sysctl_args {
+//     int    *name;    /* integer vector describing variable */
+//     int     nlen;    /* length of this vector */
+//     void   *oldval;  /* 0 or address where to store old value */
+//     size_t *oldlenp; /* available room for old value,
+//                         overwritten by actual size of old value */
+//     void   *newval;  /* 0 or address of new value */
+//     size_t  newlen;  /* size of new value */
+// };
   if (rv < 0)
   {
     /* The buffer size changed since last sysctl ('needed' is not changed) */
@@ -972,6 +1008,7 @@ krt_sysctl_scan(struct proto *p, int cmd, int table_id)
   {
     m = (struct ks_msg *)next;
     krt_read_msg(p, m, 1);
+    // read and process msg
   }
 
   return;
