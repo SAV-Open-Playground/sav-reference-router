@@ -238,11 +238,9 @@ char * send_request(char info[])
     req_str = NULL;
 
     setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(struct timeval));
-
     while(1)
     {
         memset(chunk, 0x00, 512);
-
         /*receive data*/
         if((size_recv=recv(sockfd, chunk, 512, 0)) == -1)
         {   
