@@ -88,6 +88,14 @@ proto_log_state_change(struct proto *p)
       char temp_msg[1024] = "";
       strcat(temp_msg, "{\"msg_type\":\"link_state_change\",\"protocol_name\":\"");
       strcat(temp_msg, p->name);
+      strcat(temp_msg, "\",\"channels\":\"");
+      struct channel *c;
+      WALK_LIST(c, p->channels)
+        if (channel_is_active(c))
+            {
+              strcat(temp_msg, ",");
+              strcat(temp_msg, c->name);
+            }
       strcat(temp_msg, "\",\"msg\":\"");
       if (strcmp(name, "up") == 0){
         strcat(temp_msg,"up\"}");

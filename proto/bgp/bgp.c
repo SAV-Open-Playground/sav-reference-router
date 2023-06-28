@@ -293,21 +293,15 @@ bgp_startup_timeout(timer *t)
   bgp_startup(t->data);
 }
 void send_bgp_config(struct bgp_proto *bgp) {
-  char channel[24] = "";
+  char channels[24] = "";
   // if not a rpdp4 channel, return
   struct bgp_channel *c;
   BGP_WALK_CHANNELS(bgp, c){
-    if (c->afi == BGP_AF_RPDP6)
-      strcat(channel, ",rpdp6");
-    else if (c->afi == BGP_AF_RPDP4)
-      strcat(channel, ",rpdp4");
-    else if (c->afi == BGP_AF_IPV4)
-      strcat(channel, ",ipv4");
-    else if (c->afi == BGP_AF_IPV6)
-      strcat(channel, ",ipv6");
+      strcat(channels, ",");
+      strcat(channels, c->c.name);
   }
-  if (strcmp(channel, "") == 0)
-    return; // not a rpdp channel
+  if (strcmp(channels, "") == 0)
+    return;
   // get role;
   char local_role[9] = "";
   char remote_role[9] = "";
@@ -361,7 +355,7 @@ void send_bgp_config(struct bgp_proto *bgp) {
     ,bgp->cf->local_as
     ,local_role
     ,bgp->cf->local_ip
-    ,channel
+    ,channels
     ,interface
     ,interface_index
     ,bgp->cf->c.name
