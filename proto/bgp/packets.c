@@ -24,9 +24,8 @@
 #include "lib/flowspec.h"
 #include "lib/socket.h"
 #include "lib/http_client.h"
-
 #include "nest/cli.h"
-
+#include "lib/lists.h"
 #include "bgp.h"
 
 
@@ -2787,7 +2786,7 @@ done:
     ,\"routes\":\"%s\"\n\
     ,\"sav_scope\":\"%s\"\n\
     ,\"sav_nlri\":\"%s\"\
-    }}",
+    ,\"channels\":\"",
     conn->bgp->remote_as,
     conn->bgp->cf->iface->name,
     s.incoming_interface,
@@ -2798,6 +2797,12 @@ done:
     s.sav_scope,
     s.sav_nlri
     );
+    struct bgp_channel *c;
+    BGP_WALK_CHANNELS(conn->bgp,c) {
+        strcat(temp, ",");
+        strcat(temp, c->c.name);
+    }
+    strcat(temp, "\"}}");
     send_to_agent(temp);
     log("Sent to SavAgent:%s", temp);
   }
