@@ -90,20 +90,19 @@ proto_log_state_change(struct proto *p)
       strcat(temp_msg, p->name);
       strcat(temp_msg, "\",\"channels\":\"");
       struct channel *c;
-      WALK_LIST(c, p->channels)
-        if (channel_is_active(c))
-            {
-              strcat(temp_msg, ",");
+      WALK_LIST(c, p->channels) {
               strcat(temp_msg, c->name);
+              strcat(temp_msg, ",");
             }
-      strcat(temp_msg, "\",\"msg\":\"");
+      temp_msg[strlen(temp_msg)-1] = '\0';
+      strcat(temp_msg, "\",\"msg\":");
       if (strcmp(name, "up") == 0){
-        strcat(temp_msg,"up\"}");
+        strcat(temp_msg,"true}");
         send_to_agent(temp_msg);
         log("link [%s] %s sent",p->name,name);
       }
       else if  (strcmp(name, "down") == 0){
-        strcat(temp_msg,"down\"}");
+        strcat(temp_msg,"false}");
         send_to_agent(temp_msg);
         log("link [%s] %s sent",p->name,name);
     }

@@ -2799,9 +2799,13 @@ done:
     );
     struct bgp_channel *c;
     BGP_WALK_CHANNELS(conn->bgp,c) {
-        strcat(temp, ",");
-        strcat(temp, c->c.name);
+      if channel_is_active(c)
+        {
+          strcat(temp, c->c.name);
+          strcat(temp, ",");
+        }
     }
+    temp[strlen(temp)-1] = '\0';
     strcat(temp, "\"}}");
     send_to_agent(temp);
     log("Sent to SavAgent:%s", temp);
