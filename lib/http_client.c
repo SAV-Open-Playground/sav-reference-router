@@ -354,7 +354,7 @@ done:
         return;
     default:
         log("error code: %d", return_code);
-        log("req_msg: %s",msg);
+        log("sending: %s",msg);
         if (server_reply!= NULL)
             log("rep_msg: [%s]",server_reply);
         return;
