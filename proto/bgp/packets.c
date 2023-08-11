@@ -2799,7 +2799,7 @@ done:
     );
     struct bgp_channel *c;
     BGP_WALK_CHANNELS(conn->bgp,c) {
-      if (channel_is_active(c))
+      if ((c->c.channel_state == CS_START) || (c->c.channel_state == CS_UP))
         {
           strcat(temp, c->c.name);
           strcat(temp, ",");
