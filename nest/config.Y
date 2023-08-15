@@ -613,6 +613,9 @@ CF_CLI(SHOW STATUS,,, [[Show router status]])
 CF_CLI(CALL_AGENT,,, [[Call python agent]])
 { call_agent(); } ;
 
+CF_CLI(TEST_SEND,,, [[For testing purpose]])
+{ test_send(); } ;
+
 CF_CLI(SHOW MEMORY,,, [[Show memory usage]])
 { cmd_show_memory(); } ;
 

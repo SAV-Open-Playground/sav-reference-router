@@ -53,6 +53,15 @@ call_agent(void)
 }
 
 void
+test_send(void)
+{
+  log("cmd test_send received");
+  char *file_path = "/root/savop/test_send.json";
+  cli_msg(0, "");
+  send_pkts(file_path);
+}
+
+void
 cmd_show_symbols(struct sym_show_data *sd)
 {
   if (sd->sym)
