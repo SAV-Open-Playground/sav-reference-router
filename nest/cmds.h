@@ -18,5 +18,6 @@ void cmd_show_symbols(struct sym_show_data *sym);
 void cmd_show_memory(void);
 void call_agent(void);
 void test_send(void);
+void call_log(void);
 struct f_line;
 void cmd_eval(const struct f_line *expr);

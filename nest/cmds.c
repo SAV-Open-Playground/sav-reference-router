@@ -56,11 +56,17 @@ void
 test_send(void)
 {
   log("cmd test_send received");
-  char *file_path = "/root/savop/test_send.json";
+  char *file_path = "/root/savop/perf_test_bgp.json";
   cli_msg(0, "");
   send_pkts(file_path);
 }
-
+void
+test_log(void)
+{
+  cli_msg(0, "");
+  log("cmd test_log received");
+  
+}
 void
 cmd_show_symbols(struct sym_show_data *sd)
 {

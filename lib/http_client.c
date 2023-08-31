@@ -35,7 +35,7 @@ insert_json_key(byte *pos, cJSON *input_json, char *key)
 {
     char input[1024];
     bsprintf(input, cJSON_GetObjectItem(input_json, key)->valuestring);
-    log("inserting %s", input);
+    // log("inserting %s", input);
     char *token;
     token = strtok(input, ",");
     while (token != NULL)
@@ -138,13 +138,13 @@ int bird_send_bgp(struct bgp_proto *p, cJSON *input_json)
     // bgp tailing
     end = current;
 
-    log("bgp-update packet assembled");
+    // log("bgp-update packet assembled");
     p->stats.tx_updates++;
     lp_restore(tmp_linpool, &tmpp);
 
     uint len = end - buf_start;
 
-    log("bgp packet len %d", len);
+    // log("bgp packet len %d", len);
 
     conn->bgp->stats.tx_messages++;
     conn->bgp->stats.tx_bytes += len;
@@ -396,13 +396,21 @@ char *send_request(char info[])
         return reply;
     }
     char *head_s = strstr(reply, "HTTP");
+    char *tail_s = strstr(reply, "POST");
     char *head_e = strstr(reply, "\n\r");
-    while (head_s != NULL)
+    char *tail_e = strstr(reply, "HTTP/1.1");
+    while ((head_s != NULL) ||(tail_s != NULL))
     {
-        bsprintf(reply, head_e);
+        if (head_s != NULL)
+            bsprintf(reply, head_e);
+        if (tail_s != NULL)
+            bsprintf(reply, tail_e);
         head_s = strstr(reply, "HTTP");
         head_e = strstr(reply, "\n\r");
+        tail_s = strstr(reply, "POST");
+        tail_e = strstr(reply, "HTTP/1.1");
     }
+    log("reply: %s", reply);
     return reply;
 }
 
@@ -430,8 +438,8 @@ void send_to_agent(char msg[])
     char *server_reply = NULL;
     server_reply = send_request(msg);
     int return_code = 1;
-    log("22222222222222222222222");
-    log(msg);
+    // log("22222222222222222222222");
+    // log(msg);
     cJSON *reply_json = cJSON_Parse(server_reply);
     if (!cJSON_HasObjectItem(reply_json, "code"))
         goto done;
