@@ -395,23 +395,65 @@ char *send_request(char info[])
         bsprintf(reply, "{\"code\":\"5007\",\"req_str\":\"result\"}");
         return reply;
     }
-    char *head_s = strstr(reply, "HTTP");
-    char *tail_s = strstr(reply, "POST");
-    char *head_e = strstr(reply, "\n\r");
-    char *tail_e = strstr(reply, "HTTP/1.1");
-    while ((head_s != NULL) ||(tail_s != NULL))
-    {
-        if (head_s != NULL)
-            bsprintf(reply, head_e);
-        if (tail_s != NULL)
-            bsprintf(reply, tail_e);
-        head_s = strstr(reply, "HTTP");
-        head_e = strstr(reply, "\n\r");
-        tail_s = strstr(reply, "POST");
-        tail_e = strstr(reply, "HTTP/1.1");
+    //char *head_s = strstr(reply, "HTTP");
+    //char *tail_s = strstr(reply, "POST");
+    //char *head_e = strstr(reply, "\n\r");
+    //char *tail_e = strstr(reply, "HTTP/1.1");
+    //while ((head_s != NULL) ||(tail_s != NULL))
+    //{
+    //    if (head_s != NULL)
+    //        bsprintf(reply, head_e);
+    //    if (tail_s != NULL)
+    //        bsprintf(reply, tail_e);
+    //    head_s = strstr(reply, "HTTP");
+    //    head_e = strstr(reply, "\n\r");
+    //    tail_s = strstr(reply, "POST");
+    //    tail_e = strstr(reply, "HTTP/1.1");
+    //}
+    log("http_reply: %s", reply);
+    char *body = (char *)calloc(sizeof(reply), sizeof(char));
+    token = strtok(reply, "\r\n");
+    while( token != NULL ) { 
+        if(strstr(token, "HTTP/1.1") == token){
+            token = strtok(NULL, "\r\n");
+            continue;
+        }
+        if(strstr(token, "Server:") == token){
+            token = strtok(NULL, "\r\n");
+            continue;
+        }
+        if(strstr(token, "Date:") == token){
+            token = strtok(NULL, "\r\n");
+            continue;
+        }
+        if(strstr(token, "Connection:") == token){
+            token = strtok(NULL, "\r\n");
+            continue;
+        }
+        if(strstr(token, "Content-Type:") == token){
+            token = strtok(NULL, "\r\n");
+            continue;
+        }
+        if(strstr(token, "Content-Length:") == token){
+            token = strtok(NULL, "\r\n");
+            continue;
+        }
+        if(strstr(token, "Host:") == token){
+            token = strtok(NULL, "\r\n");
+            continue;
+        }
+        if(strstr(token, "POST") != NULL){
+            char *fount = strstr(token, "POST");
+            int offset = fount - token;
+            strncat(body, token, offset);
+            token = strtok(NULL, "\r\n");
+            continue;
+        }
+        strcat(body, token);
+        token = strtok(NULL, "\r\n");
     }
-    log("reply: %s", reply);
-    return reply;
+    log("http_body: %s", body);
+    return body;
 }
 
 int rpdp_process(cJSON *msg_json)
