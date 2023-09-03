@@ -266,6 +266,7 @@ char *send_request(char info[])
     cJSON *info_json = cJSON_Parse(info);
     int reply_size = 1024;
     char *reply = (char *)calloc(reply_size, sizeof(char));
+    char *token;
 
     if (info_json == NULL)
     {
