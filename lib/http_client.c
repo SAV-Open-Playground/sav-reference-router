@@ -412,7 +412,7 @@ char *send_request(char info[])
     //    tail_e = strstr(reply, "HTTP/1.1");
     //}
     log("http_reply: %s", reply);
-    char *body = (char *)calloc(sizeof(reply), sizeof(char));
+    char *body = (char *)calloc(total_size, sizeof(char));
     token = strtok(reply, "\r\n");
     while( token != NULL ) { 
         if(strstr(token, "HTTP/1.1") == token){
