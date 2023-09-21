@@ -2156,11 +2156,11 @@ bgp_decode_nlri_rpdp4(struct bgp_parse_state *s, byte *pos, uint len, rta *a)
         bsprintf(s->sav_origin, "%u", get_u16(pos));
         pos += 2;
     }
-    log("s->sav_origin: [%s]", s->sav_origin);
+    // log("s->sav_origin: [%s]", s->sav_origin);
 
     // decode sav_scope
     uint scope_path_num = get_u8(pos);
-    log("scope_path_num: %d", scope_path_num);
+    // log("scope_path_num: %d", scope_path_num);
     pos += 1;
 
     char result_str[1024] = "";
@@ -2171,7 +2171,7 @@ bgp_decode_nlri_rpdp4(struct bgp_parse_state *s, byte *pos, uint len, rta *a)
         uint path_as_num = get_u8(pos);
         pos += 1;
         bsprintf(temp_str, "%u,", path_as_num);
-        log("path_as_num: %d", path_as_num);
+        // log("path_as_num: %d", path_as_num);
         strcat(result_str, temp_str);
         for (uint j = 0; j < path_as_num; j++)
         {
@@ -2191,7 +2191,7 @@ bgp_decode_nlri_rpdp4(struct bgp_parse_state *s, byte *pos, uint len, rta *a)
     }
     result_str[strlen(result_str) - 1] = '\0';
     strcat(s->sav_scope, result_str);
-    log("s->sav_scope: [%s]", s->sav_scope);
+    // log("s->sav_scope: [%s]", s->sav_scope);
 
     // the rest is nlri
     bsprintf(result_str, "");
@@ -2212,7 +2212,7 @@ bgp_decode_nlri_rpdp4(struct bgp_parse_state *s, byte *pos, uint len, rta *a)
     }
     result_str[strlen(result_str) - 1] = '\0';
     strcat(s->sav_nlri, result_str);
-    log("s->sav_nlri: [%s]", s->sav_nlri);
+    // log("s->sav_nlri: [%s]", s->sav_nlri);
     return;
 }
 
@@ -2867,13 +2867,18 @@ done:
         }
         temp[strlen(temp) - 1] = '\0';
         strcat(temp, "\"}}");
-        send_to_agent(temp);
+        // send_to_agent(temp);
         if (strlen(s.sav_nlri) == 0)
         {
             log("BGP UPDATE PROCESSING STARTED at %ld", (tv.tv_usec / 1000) + (tv.tv_sec * 1000));
             gettimeofday(&tv, NULL);
             log("BGP UPDATE PROCESSING FINISHED at %ld", (tv.tv_usec / 1000) + (tv.tv_sec * 1000));
+        } else {
+            log("SAV UPDATE PROCESSING STARTED at %ld", (tv.tv_usec / 1000) + (tv.tv_sec * 1000));
+            gettimeofday(&tv, NULL);
+            log("SAV UPDATE PROCESSING FINISHED at %ld", (tv.tv_usec / 1000) + (tv.tv_sec * 1000));
         }
+        send_to_agent(temp);
     }
     else
     {

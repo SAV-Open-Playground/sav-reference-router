@@ -131,27 +131,20 @@ int bird_send_bgp(struct bgp_proto *p, cJSON *input_json)
         current = insert_json_key(current, input_json, "as_path");
     }
     // end of SAV attribute
-
     // insert attr length
     put_u16(attrs_start, (current - attrs_start) - 2);
-
     // bgp tailing
     end = current;
-
     // log("bgp-update packet assembled");
     p->stats.tx_updates++;
     lp_restore(tmp_linpool, &tmpp);
-
     uint len = end - buf_start;
-
     // log("bgp packet len %d", len);
-
     conn->bgp->stats.tx_messages++;
     conn->bgp->stats.tx_bytes += len;
     memset(buf_start, 0xff, 16); /* Marker */
     put_u16(buf_start + 16, len);
     buf_start[18] = PKT_UPDATE;
-
     int socket_result = sk_send(sk, len);
     input_json = NULL;
     log("bgp-update send result, %d", socket_result);
@@ -172,7 +165,6 @@ int bird_send_sav(struct bgp_proto *p, cJSON *input_json)
     struct lp_state tmpp;
     lp_save(tmp_linpool, &tmpp); // save local linpool state
     struct bgp_channel *c = proto_find_channel_by_name(p, "rpdp4");
-
     struct bgp_write_state s = {
         .proto = p,
         .channel = c,
@@ -218,7 +210,6 @@ int bird_send_sav(struct bgp_proto *p, cJSON *input_json)
         current = insert_json_key(current, input_json, "as_path");
     }
     // end of SAV attribute
-
     // insert attr length
     put_u16(attrs_start, (current - attrs_start) - 2);
 
@@ -266,15 +257,15 @@ char *send_request(char info[])
     cJSON *info_json = cJSON_Parse(info);
     int reply_size = 1024;
     char *reply = (char *)calloc(reply_size, sizeof(char));
-    char *token;
+    // char *token = NULL;
 
     if (info_json == NULL)
     {
         cJSON_Delete(info_json);
-        bsprintf(reply, "{\"code\":\"5005\",\"msg\":\"Invalid Json String\"}");
+        bsprintf(reply, "{\"code\":\"5005\",\"msg\":\"Req:Invalid Json String\"}");
         return reply;
     }
-    char *msg_type = cJSON_GetObjectItem(info_json, "msg_type")->valuestring;
+    // char *msg_type = cJSON_GetObjectItem(info_json, "msg_type")->valuestring;
 
     memset(header_str, 0x00, sizeof(header_str));
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -382,9 +373,7 @@ char *send_request(char info[])
             }
             if (chunk != NULL)
             {
-                // log("start chunk");
-                // log(chunk);
-                // log("end chunk");
+                // log("got chunk [%s]",chunk);
                 strcat(reply, chunk);
             }
         }
@@ -396,68 +385,75 @@ char *send_request(char info[])
         bsprintf(reply, "{\"code\":\"5007\",\"req_str\":\"result\"}");
         return reply;
     }
-    //char *head_s = strstr(reply, "HTTP");
-    //char *tail_s = strstr(reply, "POST");
-    //char *head_e = strstr(reply, "\n\r");
-    //char *tail_e = strstr(reply, "HTTP/1.1");
-    //while ((head_s != NULL) ||(tail_s != NULL))
-    //{
-    //    if (head_s != NULL)
-    //        bsprintf(reply, head_e);
-    //    if (tail_s != NULL)
-    //        bsprintf(reply, tail_e);
-    //    head_s = strstr(reply, "HTTP");
-    //    head_e = strstr(reply, "\n\r");
-    //    tail_s = strstr(reply, "POST");
-    //    tail_e = strstr(reply, "HTTP/1.1");
-    //}
-    log("http_reply: %s", reply);
-    char *body = (char *)calloc(total_size, sizeof(char));
-    token = strtok(reply, "\r\n");
-    while( token != NULL ) { 
-        if(strstr(token, "HTTP/1.1") == token){
-            token = strtok(NULL, "\r\n");
-            continue;
-        }
-        if(strstr(token, "Server:") == token){
-            token = strtok(NULL, "\r\n");
-            continue;
-        }
-        if(strstr(token, "Date:") == token){
-            token = strtok(NULL, "\r\n");
-            continue;
-        }
-        if(strstr(token, "Connection:") == token){
-            token = strtok(NULL, "\r\n");
-            continue;
-        }
-        if(strstr(token, "Content-Type:") == token){
-            token = strtok(NULL, "\r\n");
-            continue;
-        }
-        if(strstr(token, "Content-Length:") == token){
-            token = strtok(NULL, "\r\n");
-            continue;
-        }
-        if(strstr(token, "Host:") == token){
-            token = strtok(NULL, "\r\n");
-            continue;
-        }
-        if(strstr(token, "POST") != NULL){
-            char *fount = strstr(token, "POST");
-            int offset = fount - token;
-            strncat(body, token, offset);
-            token = strtok(NULL, "\r\n");
-            continue;
-        }
-        strcat(body, token);
-        token = strtok(NULL, "\r\n");
+    // log("395 reply: [%s]", reply);
+    // log("396 reply: [%d]", strlen(reply));
+    char *head_s = strstr(reply, "HTTP/1.1 200 OK");
+    char *head_e = strstr(reply, "\r\n\r\n"); 
+    if (head_s != NULL)
+        bsprintf(reply, head_e+4);
+    // log("401 reply_len: [%d]", strlen(reply));
+    // log("402 reply: [%s]", reply);
+    // OD =\r; OA =\n
+    char *tail_s = strstr(reply, "POST /bird_bgp_upload/ HTTP/1.1");
+    char *tail_e = strstr(reply, "\r\n\r\n");
+    while (tail_s != NULL)
+    {       
+        // log("4016 reply: [%s]", reply);
+        bsprintf(tail_s, tail_e+4);
+        tail_s = strstr(reply, "POST /bird_bgp_upload/ HTTP/1.1");
+        tail_e = strstr(reply, "\r\n\r\n");
     }
-    log("http_body: %s", body);
-    return body;
+    reply[strlen(reply) - 1] = '\0';
+    // log("414 reply: [%s]", reply);
+    // log("http_reply: [%s]", reply);
+    return reply;
+    // log("http_reply: %s", reply);
+    // char *body = (char *)calloc(total_size, sizeof(char));
+    // token = strtok(reply, "\r\n");
+    // while( token != NULL ) { 
+    //     if(strstr(token, "HTTP/1.1") == token){
+    //         token = strtok(NULL, "\r\n");
+    //         continue;
+    //     }
+    //     if(strstr(token, "Server:") == token){
+    //         token = strtok(NULL, "\r\n");
+    //         continue;
+    //     }
+    //     if(strstr(token, "Date:") == token){
+    //         token = strtok(NULL, "\r\n");
+    //         continue;
+    //     }
+    //     if(strstr(token, "Connection:") == token){
+    //         token = strtok(NULL, "\r\n");
+    //         continue;
+    //     }
+    //     if(strstr(token, "Content-Type:") == token){
+    //         token = strtok(NULL, "\r\n");
+    //         continue;
+    //     }
+    //     if(strstr(token, "Content-Length:") == token){
+    //         token = strtok(NULL, "\r\n");
+    //         continue;
+    //     }
+    //     if(strstr(token, "Host:") == token){
+    //         token = strtok(NULL, "\r\n");
+    //         continue;
+    //     }
+    //     if(strstr(token, "POST") != NULL){
+    //         char *fount = strstr(token, "POST");
+    //         int offset = fount - token;
+    //         strncat(body, token, offset);
+    //         token = strtok(NULL, "\r\n");
+    //         continue;
+    //     }
+    //     strcat(body, token);
+    //     token = strtok(NULL, "\r\n");
+    // }
+    // log("http_body: %s", body);
+    // return body;
 }
 
-int rpdp_process(cJSON *msg_json)
+int send_rpdp_pkt(cJSON *msg_json)
 {
     char proto_name[20] = "";
     bsprintf(proto_name, "%s", cJSON_GetObjectItem(msg_json, "protocol_name")->valuestring);
@@ -481,8 +477,6 @@ void send_to_agent(char msg[])
     char *server_reply = NULL;
     server_reply = send_request(msg);
     int return_code = 1;
-    // log("22222222222222222222222");
-    // log(msg);
     cJSON *reply_json = cJSON_Parse(server_reply);
     if (!cJSON_HasObjectItem(reply_json, "code"))
         goto done;
@@ -494,11 +488,9 @@ void send_to_agent(char msg[])
     }
     else if (strcmp(msg_type, "2000") == 0)
     {
-        {
-            log("SavAgent reply %s", server_reply);
-            return_code = rpdp_process(cJSON_GetObjectItem(reply_json, "data"));
-            goto done;
-        }
+        log("SavAgent reply %s", server_reply);
+        return_code = send_rpdp_pkt(cJSON_GetObjectItem(reply_json, "data"));
+        goto done;
     }
     else
     {
@@ -541,7 +533,7 @@ void send_pkts(char *filename)
         exit(EXIT_FAILURE);
     }
     while ((getline(&line, &len, fp)) != -1)
-        return_code = rpdp_process(cJSON_Parse(line));
+        return_code = send_rpdp_pkt(cJSON_Parse(line));
     fclose(fp);
     free(line);
 }

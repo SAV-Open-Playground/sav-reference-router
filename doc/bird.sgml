@@ -437,7 +437,7 @@ protocol kernel {
 	ipv4 {
 		export all;	# Default is export none
 	};
-	persist;		# Don't remove routes on BIRD shutdown
+			# Don't remove routes on BIRD shutdown
 }
 
 protocol device {
@@ -3511,7 +3511,7 @@ protocol kernel {
 <p><code>
 protocol kernel {		# Primary routing table
 	learn;			# Learn alien routes from the kernel
-	persist;		# Don't remove routes on bird shutdown
+			# Don't remove routes on bird shutdown
 	scan time 10;		# Scan kernel routing table every 10 seconds
 	ipv4 {
 		import all;
