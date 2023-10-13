@@ -75,18 +75,18 @@ int bird_send(struct bgp_proto *p, cJSON *input_json)
     if (1 == is_native_bgp)
         return bird_send_bgp(p, input_json);
     else
-        return bird_send_sav(p, input_json);
+        return bird_send_dsav(p, input_json);
 }
 int bird_send_bgp(struct bgp_proto *p, cJSON *input_json)
 {
     log("bird_send_bgp");
     struct bgp_conn *conn = p->conn;
-    byte *current, *end, *buf_start, *buf_end;
+    byte *cur_pos, *end, *buf_start, *buf_end;
     uint type;
     sock *sk = conn->sk;
     buf_start = sk->tbuf;
     buf_end = buf_start + (bgp_max_packet_length(conn) - BGP_HEADER_LENGTH);
-    current = buf_start + BGP_HEADER_LENGTH;
+    cur_pos = buf_start + BGP_HEADER_LENGTH;
     type = conn->packets_to_send;
     struct lp_state tmpp;
     lp_save(tmp_linpool, &tmpp); // save local linpool state
@@ -101,14 +101,14 @@ int bird_send_bgp(struct bgp_proto *p, cJSON *input_json)
         .mpls = c->desc->mpls,
     };
 
-    current = insert_json_key(current, input_json, "withdraws");
-    byte *attrs_start = current;
+    cur_pos = insert_json_key(cur_pos, input_json, "withdraws");
+    byte *attrs_start = cur_pos;
     insert_u8(attrs_start + 2, BAF_OPTIONAL | BAF_EXT_LEN); // flag
     insert_u8(attrs_start + 3, BA_MP_REACH_NLRI);           // code
     put_af3(attrs_start + 6, BGP_AF_IPV4);                  // afi (2 for AFI and 1 for SAFI)
-    current = attrs_start + 9;
-    current = insert_json_key(current, input_json, "next_hop");
-    current = insert_u8(current, 0); // reserve
+    cur_pos = attrs_start + 9;
+    cur_pos = insert_json_key(cur_pos, input_json, "next_hop");
+    cur_pos = insert_u8(cur_pos, 0); // reserve
 
     int is_interior = cJSON_GetObjectItem(input_json, "is_interior")->valueint;
     if (is_interior == 0)
@@ -116,25 +116,25 @@ int bird_send_bgp(struct bgp_proto *p, cJSON *input_json)
         // TODO add intra path here
     }
     // insert nlri
-    current = insert_json_key(current, input_json, "bgp_nlri");
+    cur_pos = insert_json_key(cur_pos, input_json, "bgp_nlri");
 
     // end of standard mp reach nlri field
-    put_u16(attrs_start + 4, (current - attrs_start) - 6);
+    put_u16(attrs_start + 4, (cur_pos - attrs_start) - 6);
 
     // insert origin
-    current += bgp_put_attr_hdr(current, BA_ORIGIN, 64, 1);
-    current = insert_u8(current, p->is_interior);
+    cur_pos += bgp_put_attr_hdr(cur_pos, BA_ORIGIN, 64, 1);
+    cur_pos = insert_u8(cur_pos, p->is_interior);
     // insert as_path
     if (is_interior == 1)
     {
-        current += bgp_put_attr_hdr(current, BA_AS_PATH, 80, cJSON_GetObjectItem(input_json, "as_path_len")->valueint); // here set the length to 0 and overwite it latter
-        current = insert_json_key(current, input_json, "as_path");
+        cur_pos += bgp_put_attr_hdr(cur_pos, BA_AS_PATH, 80, cJSON_GetObjectItem(input_json, "as_path_len")->valueint); // here set the length to 0 and overwite it latter
+        cur_pos = insert_json_key(cur_pos, input_json, "as_path");
     }
     // end of SAV attribute
     // insert attr length
-    put_u16(attrs_start, (current - attrs_start) - 2);
+    put_u16(attrs_start, (cur_pos - attrs_start) - 2);
     // bgp tailing
-    end = current;
+    end = cur_pos;
     // log("bgp-update packet assembled");
     p->stats.tx_updates++;
     lp_restore(tmp_linpool, &tmpp);
@@ -151,16 +151,17 @@ int bird_send_bgp(struct bgp_proto *p, cJSON *input_json)
 
     return 0;
 }
-int bird_send_sav(struct bgp_proto *p, cJSON *input_json)
+int bird_send_dsav(struct bgp_proto *p, cJSON *input_json)
 {
-    log("bird_send_sav");
+    log("bird_send_dsav");
     struct bgp_conn *conn = p->conn;
-    byte *current, *end, *buf_start, *buf_end;
+    byte *cur_pos, *end, *buf_start, *buf_end;
     uint type;
     sock *sk = conn->sk;
     buf_start = sk->tbuf;
     buf_end = buf_start + (bgp_max_packet_length(conn) - BGP_HEADER_LENGTH);
-    current = buf_start + BGP_HEADER_LENGTH;
+    log("bgp max len: %d", (bgp_max_packet_length(conn) - BGP_HEADER_LENGTH));
+    cur_pos = buf_start + BGP_HEADER_LENGTH;
     type = conn->packets_to_send;
     struct lp_state tmpp;
     lp_save(tmp_linpool, &tmpp); // save local linpool state
@@ -174,47 +175,47 @@ int bird_send_sav(struct bgp_proto *p, cJSON *input_json)
         .add_path = c->add_path_tx,
         .mpls = c->desc->mpls,
     };
-    current = insert_json_key(current, input_json, "withdraws");
-    byte *attrs_start = current;
+    cur_pos = insert_json_key(cur_pos, input_json, "withdraws");
+    byte *attrs_start = cur_pos;
     insert_u8(attrs_start + 2, BAF_OPTIONAL | BAF_EXT_LEN); // flag
     // start of  SAV attribute
     insert_u8(attrs_start + 3, BA_MP_REACH_NLRI); // code
     put_af3(attrs_start + 6, BGP_AF_RPDP4);       // afi (2 for AFI and 1 for SAFI)
-    current = attrs_start + 9;
+    cur_pos = attrs_start + 9;
     // insert next_hop
-    current = insert_json_key(current, input_json, "next_hop");
-    current = insert_u8(current, 0); // reserve
+    cur_pos = insert_json_key(cur_pos, input_json, "next_hop");
+    cur_pos = insert_u8(cur_pos, 0); // reserve
     // begin of standard mp reach nlri field
     // //insert sav_origin
-    current = insert_json_key(current, input_json, "sav_origin");
+    cur_pos = insert_json_key(cur_pos, input_json, "sav_origin");
     // insert sav_scope
-    current = insert_json_key(current, input_json, "sav_scope");
+    cur_pos = insert_json_key(cur_pos, input_json, "sav_scope");
     int is_interior = cJSON_GetObjectItem(input_json, "is_interior")->valueint;
     if (is_interior == 0)
     {
         // TODO add intra path here
     }
     // insert nlri
-    current = insert_json_key(current, input_json, "sav_nlri");
+    cur_pos = insert_json_key(cur_pos, input_json, "sav_nlri");
 
     // end of standard mp reach nlri field
-    put_u16(attrs_start + 4, (current - attrs_start) - 6);
+    put_u16(attrs_start + 4, (cur_pos - attrs_start) - 6);
 
     // insert origin
-    current += bgp_put_attr_hdr(current, BA_ORIGIN, 64, 1);
-    current = insert_u8(current, p->is_interior);
+    cur_pos += bgp_put_attr_hdr(cur_pos, BA_ORIGIN, 64, 1);
+    cur_pos = insert_u8(cur_pos, p->is_interior);
     // insert as_path
     if (is_interior == 1)
     {
-        current += bgp_put_attr_hdr(current, BA_AS_PATH, 80, cJSON_GetObjectItem(input_json, "as_path_len")->valueint); // here set the length to 0 and overwite it latter
-        current = insert_json_key(current, input_json, "as_path");
+        cur_pos += bgp_put_attr_hdr(cur_pos, BA_AS_PATH, 80, cJSON_GetObjectItem(input_json, "as_path_len")->valueint); // here set the length to 0 and overwite it latter
+        cur_pos = insert_json_key(cur_pos, input_json, "as_path");
     }
     // end of SAV attribute
     // insert attr length
-    put_u16(attrs_start, (current - attrs_start) - 2);
+    put_u16(attrs_start, (cur_pos - attrs_start) - 2);
 
     // bgp tailing
-    end = current;
+    end = cur_pos;
 
     log("sav-update packet assembled");
     p->stats.tx_updates++;
@@ -388,18 +389,18 @@ char *send_request(char info[])
     // log("395 reply: [%s]", reply);
     // log("396 reply: [%d]", strlen(reply));
     char *head_s = strstr(reply, "HTTP/1.1 200 OK");
-    char *head_e = strstr(reply, "\r\n\r\n"); 
+    char *head_e = strstr(reply, "\r\n\r\n");
     if (head_s != NULL)
-        bsprintf(reply, head_e+4);
+        bsprintf(reply, head_e + 4);
     // log("401 reply_len: [%d]", strlen(reply));
     // log("402 reply: [%s]", reply);
     // OD =\r; OA =\n
     char *tail_s = strstr(reply, "POST /bird_bgp_upload/ HTTP/1.1");
     char *tail_e = strstr(reply, "\r\n\r\n");
     while (tail_s != NULL)
-    {       
+    {
         // log("4016 reply: [%s]", reply);
-        bsprintf(tail_s, tail_e+4);
+        bsprintf(tail_s, tail_e + 4);
         tail_s = strstr(reply, "POST /bird_bgp_upload/ HTTP/1.1");
         tail_e = strstr(reply, "\r\n\r\n");
     }
@@ -407,50 +408,6 @@ char *send_request(char info[])
     // log("414 reply: [%s]", reply);
     // log("http_reply: [%s]", reply);
     return reply;
-    // log("http_reply: %s", reply);
-    // char *body = (char *)calloc(total_size, sizeof(char));
-    // token = strtok(reply, "\r\n");
-    // while( token != NULL ) { 
-    //     if(strstr(token, "HTTP/1.1") == token){
-    //         token = strtok(NULL, "\r\n");
-    //         continue;
-    //     }
-    //     if(strstr(token, "Server:") == token){
-    //         token = strtok(NULL, "\r\n");
-    //         continue;
-    //     }
-    //     if(strstr(token, "Date:") == token){
-    //         token = strtok(NULL, "\r\n");
-    //         continue;
-    //     }
-    //     if(strstr(token, "Connection:") == token){
-    //         token = strtok(NULL, "\r\n");
-    //         continue;
-    //     }
-    //     if(strstr(token, "Content-Type:") == token){
-    //         token = strtok(NULL, "\r\n");
-    //         continue;
-    //     }
-    //     if(strstr(token, "Content-Length:") == token){
-    //         token = strtok(NULL, "\r\n");
-    //         continue;
-    //     }
-    //     if(strstr(token, "Host:") == token){
-    //         token = strtok(NULL, "\r\n");
-    //         continue;
-    //     }
-    //     if(strstr(token, "POST") != NULL){
-    //         char *fount = strstr(token, "POST");
-    //         int offset = fount - token;
-    //         strncat(body, token, offset);
-    //         token = strtok(NULL, "\r\n");
-    //         continue;
-    //     }
-    //     strcat(body, token);
-    //     token = strtok(NULL, "\r\n");
-    // }
-    // log("http_body: %s", body);
-    // return body;
 }
 
 int send_rpdp_pkt(cJSON *msg_json)
@@ -468,6 +425,7 @@ int send_rpdp_pkt(cJSON *msg_json)
         }
     }
     log("protocol not found: %s", proto_name);
+    return -1;
 }
 
 void send_to_agent(char msg[])
@@ -532,8 +490,11 @@ void send_pkts(char *filename)
         log("file not found");
         exit(EXIT_FAILURE);
     }
-    while ((getline(&line, &len, fp)) != -1)
+    while ((getline(&line, &len, fp)) != -1) {
         return_code = send_rpdp_pkt(cJSON_Parse(line));
+        if (return_code != 0)
+            log("send_rpdp_pkt failed");
+    }
     fclose(fp);
     free(line);
 }

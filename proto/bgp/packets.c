@@ -2142,6 +2142,7 @@ bgp_decode_rpdp4_asn(char target[], byte *pos, int is_as4)
 static void
 bgp_decode_nlri_rpdp4(struct bgp_parse_state *s, byte *pos, uint len, rta *a)
 /* Although named as nlri decode, we decode other staff here.*/
+// UPDATE-SPA
 {
     byte *end_pos = pos + len;
     log("bgp_decode_nlri_rpdp4 len: %d", len);
@@ -2829,7 +2830,7 @@ bgp_rx_update(struct bgp_conn *conn, byte *pkt, uint len)
         bgp_decode_nlri(&s, s.mp_reach_af, s.mp_reach_nlri, s.mp_reach_len,
                         ea, s.mp_next_hop_data, s.mp_next_hop_len);
 done:
-
+    log("2832 %u %u", s.mp_reach_af,s.mp_unreach_af);
     rta_free(s.cached_rta);
     lp_restore(tmp_linpool, &tmpp); /*restore local state*/
     if (s.send_to_sav_app_bird == 1)

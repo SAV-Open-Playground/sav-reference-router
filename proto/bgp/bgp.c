@@ -1693,7 +1693,7 @@ bgp_start(struct proto *P)
   }
 
   olock_acquire(lock);
-  send_bgp_config(p);
+  // send_bgp_config(p);
   return PS_START;
 }
 
