@@ -489,9 +489,13 @@ struct bgp_parse_state {
   char as_path[1024];
   char sav_origin[20];// asn of the origin of this packet
   char sav_scope[1024]; // list of as paths needs to go
-  char sav_nlri[1024]; // nlri data for sav
+  char spa_add[1024]; // mp_reach_nlri data for sav
+  char spa_del[1024]; // mp_unreach_nlri data for sav
+  char spd_add[1024]; // mp_reach_nlri data for sav
+  char spd_del[1024]; // mp_unreach_nlri data for sav
   int  send_to_sav_app_bird; // 1: send to sav_agent,otherwise not
   char routes[1024]; // list of modified routes
+  char temp_u8[4];
 };
 
 #define BGP_PORT		179

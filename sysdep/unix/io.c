@@ -55,12 +55,12 @@
    this to gen small latencies */
 #define MAX_RX_STEPS 4
 
-
 /*
  *	Tracked Files
  */
 
-struct rfile {
+struct rfile
+{
   resource r;
   FILE *f;
 };
@@ -68,7 +68,7 @@ struct rfile {
 static void
 rf_free(resource *r)
 {
-  struct rfile *a = (struct rfile *) r;
+  struct rfile *a = (struct rfile *)r;
 
   fclose(a->f);
 }
@@ -76,19 +76,18 @@ rf_free(resource *r)
 static void
 rf_dump(resource *r)
 {
-  struct rfile *a = (struct rfile *) r;
+  struct rfile *a = (struct rfile *)r;
 
   debug("(FILE *%p)\n", a->f);
 }
 
 static struct resclass rf_class = {
-  "FILE",
-  sizeof(struct rfile),
-  rf_free,
-  rf_dump,
-  NULL,
-  NULL
-};
+    "FILE",
+    sizeof(struct rfile),
+    rf_free,
+    rf_dump,
+    NULL,
+    NULL};
 
 struct rfile *
 rf_open(pool *p, const char *name, const char *mode)
@@ -109,12 +108,10 @@ rf_file(struct rfile *f)
   return f->f;
 }
 
-int
-rf_fileno(struct rfile *f)
+int rf_fileno(struct rfile *f)
 {
   return fileno(f->f);
 }
-
 
 /*
  *	Time clock
@@ -122,8 +119,7 @@ rf_fileno(struct rfile *f)
 
 btime boot_time;
 
-void
-times_init(struct timeloop *loop)
+void times_init(struct timeloop *loop)
 {
   struct timespec ts;
   int rv;
@@ -132,15 +128,14 @@ times_init(struct timeloop *loop)
   if (rv < 0)
     die("Monotonic clock is missing");
 
-  if ((ts.tv_sec < 0) || (((u64) ts.tv_sec) > ((u64) 1 << 40)))
+  if ((ts.tv_sec < 0) || (((u64)ts.tv_sec) > ((u64)1 << 40)))
     log(L_WARN "Monotonic clock is crazy");
 
   loop->last_time = ts.tv_sec S + ts.tv_nsec NS;
   loop->real_time = 0;
 }
 
-void
-times_update(struct timeloop *loop)
+void times_update(struct timeloop *loop)
 {
   struct timespec ts;
   int rv;
@@ -158,8 +153,7 @@ times_update(struct timeloop *loop)
   loop->real_time = 0;
 }
 
-void
-times_update_real_time(struct timeloop *loop)
+void times_update_real_time(struct timeloop *loop)
 {
   struct timespec ts;
   int rv;
@@ -170,7 +164,6 @@ times_update_real_time(struct timeloop *loop)
 
   loop->real_time = ts.tv_sec S + ts.tv_nsec NS;
 }
-
 
 /**
  * DOC: Sockets
@@ -197,13 +190,14 @@ times_update_real_time(struct timeloop *loop)
 #define SOL_ICMPV6 IPPROTO_ICMPV6
 #endif
 
-
 /*
  *	Sockaddr helper functions
  */
 
 static inline int UNUSED sockaddr_length(int af)
-{ return (af == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6); }
+{
+  return (af == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+}
 
 static inline void
 sockaddr_fill4(struct sockaddr_in *sa, ip_addr a, uint port)
@@ -233,13 +227,12 @@ sockaddr_fill6(struct sockaddr_in6 *sa, ip_addr a, struct iface *ifa, uint port)
     sa->sin6_scope_id = ifa->index;
 }
 
-void
-sockaddr_fill(sockaddr *sa, int af, ip_addr a, struct iface *ifa, uint port)
+void sockaddr_fill(sockaddr *sa, int af, ip_addr a, struct iface *ifa, uint port)
 {
   if (af == AF_INET)
-    sockaddr_fill4((struct sockaddr_in *) sa, a, port);
+    sockaddr_fill4((struct sockaddr_in *)sa, a, port);
   else if (af == AF_INET6)
-    sockaddr_fill6((struct sockaddr_in6 *) sa, a, ifa, port);
+    sockaddr_fill6((struct sockaddr_in6 *)sa, a, ifa, port);
   else
     bug("Unknown AF");
 }
@@ -261,27 +254,25 @@ sockaddr_read6(struct sockaddr_in6 *sa, ip_addr *a, struct iface **ifa, uint *po
     *ifa = if_find_by_index(sa->sin6_scope_id);
 }
 
-int
-sockaddr_read(sockaddr *sa, int af, ip_addr *a, struct iface **ifa, uint *port)
+int sockaddr_read(sockaddr *sa, int af, ip_addr *a, struct iface **ifa, uint *port)
 {
   if (sa->sa.sa_family != af)
     goto fail;
 
   if (af == AF_INET)
-    sockaddr_read4((struct sockaddr_in *) sa, a, port);
+    sockaddr_read4((struct sockaddr_in *)sa, a, port);
   else if (af == AF_INET6)
-    sockaddr_read6((struct sockaddr_in6 *) sa, a, ifa, port);
+    sockaddr_read6((struct sockaddr_in6 *)sa, a, ifa, port);
   else
     goto fail;
 
   return 0;
 
- fail:
+fail:
   *a = IPA_NONE;
   *port = 0;
   return -1;
 }
-
 
 /*
  *	IPv6 multicast syscalls
@@ -289,8 +280,10 @@ sockaddr_read(sockaddr *sa, int af, ip_addr *a, struct iface **ifa, uint *port)
 
 /* Fortunately standardized in RFC 3493 */
 
-#define INIT_MREQ6(maddr,ifa) \
-  { .ipv6mr_multiaddr = ipa_to_in6(maddr), .ipv6mr_interface = ifa->index }
+#define INIT_MREQ6(maddr, ifa)                                            \
+  {                                                                       \
+    .ipv6mr_multiaddr = ipa_to_in6(maddr), .ipv6mr_interface = ifa->index \
+  }
 
 static inline int
 sk_setup_multicast6(sock *s)
@@ -333,7 +326,6 @@ sk_leave_group6(sock *s, ip_addr maddr)
   return 0;
 }
 
-
 /*
  *	IPv6 packet control messages
  */
@@ -355,7 +347,6 @@ sk_leave_group6(sock *s, ip_addr maddr)
 #ifndef IPV6_RECVHOPLIMIT
 #define IPV6_RECVHOPLIMIT IPV6_HOPLIMIT
 #endif
-
 
 #define CMSG6_SPACE_PKTINFO CMSG_SPACE(sizeof(struct in6_pktinfo))
 #define CMSG6_SPACE_TTL CMSG_SPACE(sizeof(int))
@@ -387,7 +378,7 @@ sk_process_cmsg6_pktinfo(sock *s, struct cmsghdr *cm)
 {
   if (cm->cmsg_type == IPV6_PKTINFO)
   {
-    struct in6_pktinfo *pi = (struct in6_pktinfo *) CMSG_DATA(cm);
+    struct in6_pktinfo *pi = (struct in6_pktinfo *)CMSG_DATA(cm);
     s->laddr = ipa_from_in6(pi->ipi6_addr);
     s->lifindex = pi->ipi6_ifindex;
   }
@@ -397,7 +388,7 @@ static inline void
 sk_process_cmsg6_ttl(sock *s, struct cmsghdr *cm)
 {
   if (cm->cmsg_type == IPV6_HOPLIMIT)
-    s->rcv_ttl = * (int *) CMSG_DATA(cm);
+    s->rcv_ttl = *(int *)CMSG_DATA(cm);
 }
 
 static inline void
@@ -416,13 +407,12 @@ sk_prepare_cmsgs6(sock *s, struct msghdr *msg, void *cbuf, size_t cbuflen)
   cm->cmsg_len = CMSG_LEN(sizeof(*pi));
   controllen += CMSG_SPACE(sizeof(*pi));
 
-  pi = (struct in6_pktinfo *) CMSG_DATA(cm);
+  pi = (struct in6_pktinfo *)CMSG_DATA(cm);
   pi->ipi6_ifindex = s->iface ? s->iface->index : 0;
   pi->ipi6_addr = ipa_to_in6(s->saddr);
 
   msg->msg_controllen = controllen;
 }
-
 
 /*
  *	Miscellaneous socket syscalls
@@ -513,7 +503,6 @@ sk_rx_buffer(sock *s, int *len)
     return s->rbuf;
 }
 
-
 /*
  *	Public socket functions
  */
@@ -528,8 +517,7 @@ sk_rx_buffer(sock *s, int *len)
  * Result: 0 for success, -1 for an error.
  */
 
-int
-sk_setup_multicast(sock *s)
+int sk_setup_multicast(sock *s)
 {
   ASSERT(s->iface);
 
@@ -550,8 +538,7 @@ sk_setup_multicast(sock *s)
  * Result: 0 for success, -1 for an error.
  */
 
-int
-sk_join_group(sock *s, ip_addr maddr)
+int sk_join_group(sock *s, ip_addr maddr)
 {
   if (sk_is_ipv4(s))
     return sk_join_group4(s, maddr);
@@ -570,8 +557,7 @@ sk_join_group(sock *s, ip_addr maddr)
  * Result: 0 for success, -1 for an error.
  */
 
-int
-sk_leave_group(sock *s, ip_addr maddr)
+int sk_leave_group(sock *s, ip_addr maddr)
 {
   if (sk_is_ipv4(s))
     return sk_leave_group4(s, maddr);
@@ -590,8 +576,7 @@ sk_leave_group(sock *s, ip_addr maddr)
  * Result: 0 for success, -1 for an error.
  */
 
-int
-sk_setup_broadcast(sock *s)
+int sk_setup_broadcast(sock *s)
 {
   int y = 1;
 
@@ -612,8 +597,7 @@ sk_setup_broadcast(sock *s)
  * Result: 0 for success, -1 for an error.
  */
 
-int
-sk_set_ttl(sock *s, int ttl)
+int sk_set_ttl(sock *s, int ttl)
 {
   s->ttl = ttl;
 
@@ -634,8 +618,7 @@ sk_set_ttl(sock *s, int ttl)
  * Result: 0 for success, -1 for an error.
  */
 
-int
-sk_set_min_ttl(sock *s, int ttl)
+int sk_set_min_ttl(sock *s, int ttl)
 {
   if (sk_is_ipv4(s))
     return sk_set_min_ttl4(s, ttl);
@@ -689,8 +672,7 @@ sk_set_md5_auth(sock *s, ip_addr local, ip_addr remote, struct iface *ifa, char 
  * Result: 0 for success, -1 for an error.
  */
 
-int
-sk_set_ipv6_checksum(sock *s, int offset)
+int sk_set_ipv6_checksum(sock *s, int offset)
 {
   if (setsockopt(s->fd, SOL_IPV6, IPV6_CHECKSUM, &offset, sizeof(offset)) < 0)
     ERR("IPV6_CHECKSUM");
@@ -698,8 +680,7 @@ sk_set_ipv6_checksum(sock *s, int offset)
   return 0;
 }
 
-int
-sk_set_icmp6_filter(sock *s, int p1, int p2)
+int sk_set_icmp6_filter(sock *s, int p1, int p2)
 {
   /* a bit of lame interface, but it is here only for Radv */
   struct icmp6_filter f;
@@ -714,12 +695,10 @@ sk_set_icmp6_filter(sock *s, int p1, int p2)
   return 0;
 }
 
-void
-sk_log_error(sock *s, const char *p)
+void sk_log_error(sock *s, const char *p)
 {
   log(L_ERR "%s: Socket error: %s%#m", p, s->err);
 }
-
 
 /*
  *	Actual struct birdsock code
@@ -795,7 +774,7 @@ sk_ssh_free(sock *s)
 static void
 sk_free(resource *r)
 {
-  sock *s = (sock *) r;
+  sock *s = (sock *)r;
 
   sk_free_bufs(s);
 
@@ -823,8 +802,7 @@ sk_free(resource *r)
   s->fd = -1;
 }
 
-void
-sk_set_rbsize(sock *s, uint val)
+void sk_set_rbsize(sock *s, uint val)
 {
   ASSERT(s->rbuf_alloc == s->rbuf);
 
@@ -837,8 +815,7 @@ sk_set_rbsize(sock *s, uint val)
   s->rpos = s->rbuf = s->rbuf_alloc;
 }
 
-void
-sk_set_tbsize(sock *s, uint val)
+void sk_set_tbsize(sock *s, uint val)
 {
   ASSERT(s->tbuf_alloc == s->tbuf);
 
@@ -850,18 +827,16 @@ sk_set_tbsize(sock *s, uint val)
   s->tbsize = val;
   s->tbuf = s->tbuf_alloc = xrealloc(s->tbuf_alloc, val);
   s->tpos = s->tbuf + (s->tpos - old_tbuf);
-  s->ttx  = s->tbuf + (s->ttx  - old_tbuf);
+  s->ttx = s->tbuf + (s->ttx - old_tbuf);
 }
 
-void
-sk_set_tbuf(sock *s, void *tbuf)
+void sk_set_tbuf(sock *s, void *tbuf)
 {
   s->tbuf = tbuf ?: s->tbuf_alloc;
   s->ttx = s->tpos = s->tbuf;
 }
 
-void
-sk_reallocate(sock *s)
+void sk_reallocate(sock *s)
 {
   sk_free_bufs(s);
   sk_alloc_bufs(s);
@@ -870,29 +845,28 @@ sk_reallocate(sock *s)
 static void
 sk_dump(resource *r)
 {
-  sock *s = (sock *) r;
-  static char *sk_type_names[] = { "TCP<", "TCP>", "TCP", "UDP", NULL, "IP", NULL, "MAGIC", "UNIX<", "UNIX", "SSH>", "SSH", "DEL!" };
+  sock *s = (sock *)r;
+  static char *sk_type_names[] = {"TCP<", "TCP>", "TCP", "UDP", NULL, "IP", NULL, "MAGIC", "UNIX<", "UNIX", "SSH>", "SSH", "DEL!"};
 
   debug("(%s, ud=%p, sa=%I, sp=%d, da=%I, dp=%d, tos=%d, ttl=%d, if=%s)\n",
-	sk_type_names[s->type],
-	s->data,
-	s->saddr,
-	s->sport,
-	s->daddr,
-	s->dport,
-	s->tos,
-	s->ttl,
-	s->iface ? s->iface->name : "none");
+        sk_type_names[s->type],
+        s->data,
+        s->saddr,
+        s->sport,
+        s->daddr,
+        s->dport,
+        s->tos,
+        s->ttl,
+        s->iface ? s->iface->name : "none");
 }
 
 static struct resclass sk_class = {
-  "Socket",
-  sizeof(sock),
-  sk_free,
-  sk_dump,
-  NULL,
-  NULL
-};
+    "Socket",
+    sizeof(sock),
+    sk_free,
+    sk_dump,
+    NULL,
+    NULL};
 
 /**
  * sk_new - create a socket
@@ -975,50 +949,50 @@ sk_setup(sock *s)
   {
     if (s->flags & SKF_LADDR_RX)
       if (sk_request_cmsg4_pktinfo(s) < 0)
-	return -1;
+        return -1;
 
     if (s->flags & SKF_TTL_RX)
       if (sk_request_cmsg4_ttl(s) < 0)
-	return -1;
+        return -1;
 
     if ((s->type == SK_UDP) || (s->type == SK_IP))
       if (sk_disable_mtu_disc4(s) < 0)
-	return -1;
+        return -1;
 
     if (s->ttl >= 0)
       if (sk_set_ttl4(s, s->ttl) < 0)
-	return -1;
+        return -1;
 
     if (s->tos >= 0)
       if (sk_set_tos4(s, s->tos) < 0)
-	return -1;
+        return -1;
   }
 
   if (sk_is_ipv6(s))
   {
     if ((s->type == SK_TCP_PASSIVE) || (s->type == SK_TCP_ACTIVE) || (s->type == SK_UDP))
       if (setsockopt(fd, SOL_IPV6, IPV6_V6ONLY, &y, sizeof(y)) < 0)
-	ERR("IPV6_V6ONLY");
+        ERR("IPV6_V6ONLY");
 
     if (s->flags & SKF_LADDR_RX)
       if (sk_request_cmsg6_pktinfo(s) < 0)
-	return -1;
+        return -1;
 
     if (s->flags & SKF_TTL_RX)
       if (sk_request_cmsg6_ttl(s) < 0)
-	return -1;
+        return -1;
 
     if ((s->type == SK_UDP) || (s->type == SK_IP))
       if (sk_disable_mtu_disc6(s) < 0)
-	return -1;
+        return -1;
 
     if (s->ttl >= 0)
       if (sk_set_ttl6(s, s->ttl) < 0)
-	return -1;
+        return -1;
 
     if (s->tos >= 0)
       if (sk_set_tos6(s, s->tos) < 0)
-	return -1;
+        return -1;
   }
 
   /* Must be after sk_set_tos4() as setting ToS on Linux also mangles priority */
@@ -1089,7 +1063,7 @@ sk_passive_connected(sock *s, int type)
   if (type == SK_TCP)
   {
     if ((getsockname(fd, &loc_sa.sa, &loc_sa_len) < 0) ||
-	(sockaddr_read(&loc_sa, s->af, &t->saddr, &t->iface, &t->sport) < 0))
+        (sockaddr_read(&loc_sa, s->af, &t->saddr, &t->iface, &t->sport) < 0))
       log(L_WARN "SOCK: Cannot get local IP address for TCP<");
 
     if (sockaddr_read(&rem_sa, s->af, &t->daddr, &t->iface, &t->dport) < 0)
@@ -1156,39 +1130,39 @@ sk_ssh_connect(sock *s)
       /* Check server identity */
       switch (ssh_is_server_known(s->ssh->session))
       {
-#define LOG_WARN_ABOUT_SSH_SERVER_VALIDATION(s,msg,args...) log(L_WARN "SSH Identity %s@%s:%u: " msg, (s)->ssh->username, (s)->host, (s)->dport, ## args);
+#define LOG_WARN_ABOUT_SSH_SERVER_VALIDATION(s, msg, args...) log(L_WARN "SSH Identity %s@%s:%u: " msg, (s)->ssh->username, (s)->host, (s)->dport, ##args);
       case SSH_SERVER_KNOWN_OK:
-	/* The server is known and has not changed. */
-	break;
+        /* The server is known and has not changed. */
+        break;
 
       case SSH_SERVER_NOT_KNOWN:
-	LOG_WARN_ABOUT_SSH_SERVER_VALIDATION(s, "The server is unknown, its public key was not found in the known host file %s", s->ssh->server_hostkey_path);
-	break;
+        LOG_WARN_ABOUT_SSH_SERVER_VALIDATION(s, "The server is unknown, its public key was not found in the known host file %s", s->ssh->server_hostkey_path);
+        break;
 
       case SSH_SERVER_KNOWN_CHANGED:
-	LOG_WARN_ABOUT_SSH_SERVER_VALIDATION(s, "The server key has changed. Either you are under attack or the administrator changed the key.");
-	server_identity_is_ok = 0;
-	break;
+        LOG_WARN_ABOUT_SSH_SERVER_VALIDATION(s, "The server key has changed. Either you are under attack or the administrator changed the key.");
+        server_identity_is_ok = 0;
+        break;
 
       case SSH_SERVER_FILE_NOT_FOUND:
-	LOG_WARN_ABOUT_SSH_SERVER_VALIDATION(s, "The known host file %s does not exist", s->ssh->server_hostkey_path);
-	server_identity_is_ok = 0;
-	break;
+        LOG_WARN_ABOUT_SSH_SERVER_VALIDATION(s, "The known host file %s does not exist", s->ssh->server_hostkey_path);
+        server_identity_is_ok = 0;
+        break;
 
       case SSH_SERVER_ERROR:
-	LOG_WARN_ABOUT_SSH_SERVER_VALIDATION(s, "Some error happened");
-	server_identity_is_ok = 0;
-	break;
+        LOG_WARN_ABOUT_SSH_SERVER_VALIDATION(s, "Some error happened");
+        server_identity_is_ok = 0;
+        break;
 
       case SSH_SERVER_FOUND_OTHER:
-	LOG_WARN_ABOUT_SSH_SERVER_VALIDATION(s, "The server gave use a key of a type while we had an other type recorded. " \
-					     "It is a possible attack.");
-	server_identity_is_ok = 0;
-	break;
+        LOG_WARN_ABOUT_SSH_SERVER_VALIDATION(s, "The server gave use a key of a type while we had an other type recorded. "
+                                                "It is a possible attack.");
+        server_identity_is_ok = 0;
+        break;
       }
 
       if (!server_identity_is_ok)
-	return SSH_ERROR;
+        return SSH_ERROR;
     }
   } /* fallthrough */
 
@@ -1240,13 +1214,13 @@ sk_ssh_connect(sock *s)
       switch (ssh_channel_request_subsystem(s->ssh->channel, s->ssh->subsystem))
       {
       case SSH_AGAIN:
-	return SSH_AGAIN;
+        return SSH_AGAIN;
 
       case SSH_OK:
-	break;
+        break;
 
       default:
-	return SSH_ERROR;
+        return SSH_ERROR;
       }
     }
   } /* fallthrough */
@@ -1304,7 +1278,7 @@ sk_open_ssh(sock *s)
 
   return ssh_get_fd(sess);
 
- err:
+err:
   return -1;
 }
 #endif
@@ -1319,8 +1293,7 @@ sk_open_ssh(sock *s)
  *
  * Result: 0 for success, -1 for an error.
  */
-int
-sk_open(sock *s)
+int sk_open(sock *s)
 {
   int af = AF_UNSPEC;
   int fd = -1;
@@ -1341,7 +1314,7 @@ sk_open(sock *s)
     {
     case 0:
       ASSERT(ipa_zero(s->saddr) || ipa_zero(s->daddr) ||
-	     (ipa_is_ip4(s->saddr) == ipa_is_ip4(s->daddr)));
+             (ipa_is_ip4(s->saddr) == ipa_is_ip4(s->daddr)));
       af = (ipa_is_ip4(s->saddr) || ipa_is_ip4(s->daddr)) ? AF_INET : AF_INET6;
       break;
 
@@ -1365,7 +1338,7 @@ sk_open(sock *s)
   switch (s->type)
   {
   case SK_TCP_ACTIVE:
-    s->ttx = "";			/* Force s->ttx != s->tpos */
+    s->ttx = ""; /* Force s->ttx != s->tpos */
     /* Fall thru */
   case SK_TCP_PASSIVE:
     fd = socket(af, SOCK_STREAM, IPPROTO_TCP);
@@ -1376,7 +1349,7 @@ sk_open(sock *s)
 
 #ifdef HAVE_LIBSSH
   case SK_SSH_ACTIVE:
-    s->ttx = "";			/* Force s->ttx != s->tpos */
+    s->ttx = ""; /* Force s->ttx != s->tpos */
     fd = sk_open_ssh(s);
     break;
 #endif
@@ -1420,21 +1393,20 @@ sk_open(sock *s)
       int y = 1;
 
       if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &y, sizeof(y)) < 0)
-	ERR2("SO_REUSEADDR");
+        ERR2("SO_REUSEADDR");
 
 #ifdef CONFIG_NO_IFACE_BIND
       /* Workaround missing ability to bind to an iface */
       if ((s->type == SK_UDP) && s->iface && ipa_zero(bind_addr))
       {
-	if (setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &y, sizeof(y)) < 0)
-	  ERR2("SO_REUSEPORT");
+        if (setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &y, sizeof(y)) < 0)
+          ERR2("SO_REUSEPORT");
       }
 #endif
     }
-    else
-      if (s->flags & SKF_HIGH_PORT)
-	if (sk_set_high_port(s) < 0)
-	  log(L_WARN "Socket error: %s%#m", s->err);
+    else if (s->flags & SKF_HIGH_PORT)
+      if (sk_set_high_port(s) < 0)
+        log(L_WARN "Socket error: %s%#m", s->err);
 
     if (s->flags & SKF_FREEBIND)
       if (sk_set_freebind(s) < 0)
@@ -1456,7 +1428,7 @@ sk_open(sock *s)
     if (connect(fd, &sa.sa, SA_LEN(sa)) >= 0)
       sk_tcp_connected(s);
     else if (errno != EINTR && errno != EAGAIN && errno != EINPROGRESS &&
-	     errno != ECONNREFUSED && errno != EHOSTUNREACH && errno != ENETUNREACH)
+             errno != ECONNREFUSED && errno != EHOSTUNREACH && errno != ENETUNREACH)
       ERR2("connect");
     break;
 
@@ -1484,8 +1456,7 @@ err:
   return -1;
 }
 
-int
-sk_open_unix(sock *s, char *name)
+int sk_open_unix(sock *s, char *name)
 {
   struct sockaddr_un sa;
   int fd;
@@ -1505,7 +1476,7 @@ sk_open_unix(sock *s, char *name)
   sa.sun_family = AF_UNIX;
   strcpy(sa.sun_path, name);
 
-  if (bind(fd, (struct sockaddr *) &sa, SUN_LEN(&sa)) < 0)
+  if (bind(fd, (struct sockaddr *)&sa, SUN_LEN(&sa)) < 0)
     return -1;
 
   if (listen(fd, 8) < 0)
@@ -1516,10 +1487,9 @@ sk_open_unix(sock *s, char *name)
   return 0;
 }
 
-
-#define CMSG_RX_SPACE MAX(CMSG4_SPACE_PKTINFO+CMSG4_SPACE_TTL, \
-			  CMSG6_SPACE_PKTINFO+CMSG6_SPACE_TTL)
-#define CMSG_TX_SPACE MAX(CMSG4_SPACE_PKTINFO,CMSG6_SPACE_PKTINFO)
+#define CMSG_RX_SPACE MAX(CMSG4_SPACE_PKTINFO + CMSG4_SPACE_TTL, \
+                          CMSG6_SPACE_PKTINFO + CMSG6_SPACE_TTL)
+#define CMSG_TX_SPACE MAX(CMSG4_SPACE_PKTINFO, CMSG6_SPACE_PKTINFO)
 
 static void
 sk_prepare_cmsgs(sock *s, struct msghdr *msg, void *cbuf, size_t cbuflen)
@@ -1555,7 +1525,6 @@ sk_process_cmsgs(sock *s, struct msghdr *msg)
   }
 }
 
-
 static inline int
 sk_sendmsg(sock *s)
 {
@@ -1567,11 +1536,10 @@ sk_sendmsg(sock *s)
   sockaddr_fill(&dst, s->af, s->daddr, s->iface, s->dport);
 
   struct msghdr msg = {
-    .msg_name = &dst.sa,
-    .msg_namelen = SA_LEN(dst),
-    .msg_iov = &iov,
-    .msg_iovlen = 1
-  };
+      .msg_name = &dst.sa,
+      .msg_namelen = SA_LEN(dst),
+      .msg_iov = &iov,
+      .msg_iovlen = 1};
 
 #ifdef CONFIG_DONTROUTE_UNICAST
   /* FreeBSD silently changes TTL to 1 when MSG_DONTROUTE is used, therefore we
@@ -1582,7 +1550,7 @@ sk_sendmsg(sock *s)
 
 #ifdef CONFIG_USE_HDRINCL
   byte hdr[20];
-  struct iovec iov2[2] = { {hdr, 20}, iov };
+  struct iovec iov2[2] = {{hdr, 20}, iov};
 
   if (s->flags & SKF_HDRINCL)
   {
@@ -1606,23 +1574,22 @@ sk_recvmsg(sock *s)
   sockaddr src;
 
   struct msghdr msg = {
-    .msg_name = &src.sa,
-    .msg_namelen = sizeof(src), // XXXX ??
-    .msg_iov = &iov,
-    .msg_iovlen = 1,
-    .msg_control = cmsg_buf,
-    .msg_controllen = sizeof(cmsg_buf),
-    .msg_flags = 0
-  };
+      .msg_name = &src.sa,
+      .msg_namelen = sizeof(src), // XXXX ??
+      .msg_iov = &iov,
+      .msg_iovlen = 1,
+      .msg_control = cmsg_buf,
+      .msg_controllen = sizeof(cmsg_buf),
+      .msg_flags = 0};
 
   int rv = recvmsg(s->fd, &msg, 0);
   if (rv < 0)
     return rv;
 
-  //ifdef IPV4
-  //  if (cf_type == SK_IP)
-  //    rv = ipv4_skip_header(pbuf, rv);
-  //endif
+  // ifdef IPV4
+  //   if (cf_type == SK_IP)
+  //     rv = ipv4_skip_header(pbuf, rv);
+  // endif
 
   sockaddr_read(&src, s->af, &s->faddr, NULL, &s->fport);
   sk_process_cmsgs(s, &msg);
@@ -1634,7 +1601,6 @@ sk_recvmsg(sock *s)
 
   return rv;
 }
-
 
 static inline void reset_tx_buffer(sock *s) { s->ttx = s->tpos = s->tbuf; }
 
@@ -1654,14 +1620,14 @@ sk_maybe_write(sock *s)
 
       if (e < 0)
       {
-	if (errno != EINTR && errno != EAGAIN)
-	{
-	  reset_tx_buffer(s);
-	  /* EPIPE is just a connection close notification during TX */
-	  s->err_hook(s, (errno != EPIPE) ? errno : 0);
-	  return -1;
-	}
-	return 0;
+        if (errno != EINTR && errno != EAGAIN)
+        {
+          reset_tx_buffer(s);
+          /* EPIPE is just a connection close notification during TX */
+          s->err_hook(s, (errno != EPIPE) ? errno : 0);
+          return -1;
+        }
+        return 0;
       }
       s->ttx += e;
     }
@@ -1676,13 +1642,13 @@ sk_maybe_write(sock *s)
 
       if (e < 0)
       {
-	s->err = ssh_get_error(s->ssh->session);
-	s->err_hook(s, ssh_get_error_code(s->ssh->session));
+        s->err = ssh_get_error(s->ssh->session);
+        s->err_hook(s, ssh_get_error_code(s->ssh->session));
 
-	reset_tx_buffer(s);
-	/* EPIPE is just a connection close notification during TX */
-	s->err_hook(s, (errno != EPIPE) ? errno : 0);
-	return -1;
+        reset_tx_buffer(s);
+        /* EPIPE is just a connection close notification during TX */
+        s->err_hook(s, (errno != EPIPE) ? errno : 0);
+        return -1;
       }
       s->ttx += e;
     }
@@ -1692,42 +1658,41 @@ sk_maybe_write(sock *s)
 
   case SK_UDP:
   case SK_IP:
-    {
-      if (s->tbuf == s->tpos)
-	return 1;
-
-      e = sk_sendmsg(s);
-
-      if (e < 0)
-      {
-	if (errno != EINTR && errno != EAGAIN)
-	{
-	  reset_tx_buffer(s);
-	  s->err_hook(s, errno);
-	  return -1;
-	}
-
-	if (!s->tx_hook)
-	  reset_tx_buffer(s);
-	return 0;
-      }
-      reset_tx_buffer(s);
+  {
+    if (s->tbuf == s->tpos)
       return 1;
+
+    e = sk_sendmsg(s);
+
+    if (e < 0)
+    {
+      if (errno != EINTR && errno != EAGAIN)
+      {
+        reset_tx_buffer(s);
+        s->err_hook(s, errno);
+        return -1;
+      }
+
+      if (!s->tx_hook)
+        reset_tx_buffer(s);
+      return 0;
     }
+    reset_tx_buffer(s);
+    return 1;
+  }
 
   default:
     bug("sk_maybe_write: unknown socket type %d", s->type);
   }
 }
 
-int
-sk_rx_ready(sock *s)
+int sk_rx_ready(sock *s)
 {
   int rv;
-  struct pollfd pfd = { .fd = s->fd };
+  struct pollfd pfd = {.fd = s->fd};
   pfd.events |= POLLIN;
 
- redo:
+redo:
   rv = poll(&pfd, 1, 0);
 
   if ((rv < 0) && (errno == EINTR || errno == EAGAIN))
@@ -1748,8 +1713,7 @@ sk_rx_ready(sock *s)
  * and calls the @tx_hook of the socket when the tranmission
  * takes place.
  */
-int
-sk_send(sock *s, unsigned len)
+int sk_send(sock *s, unsigned len)
 {
   s->ttx = s->tbuf;
   s->tpos = s->tbuf + len;
@@ -1767,8 +1731,7 @@ sk_send(sock *s, unsigned len)
  * which allows destination of the packet to be chosen dynamically.
  * Raw IP sockets should use 0 for @port.
  */
-int
-sk_send_to(sock *s, unsigned len, ip_addr addr, unsigned port)
+int sk_send_to(sock *s, unsigned len, ip_addr addr, unsigned port)
 {
   s->daddr = addr;
   if (port)
@@ -1782,7 +1745,7 @@ sk_send_to(sock *s, unsigned len, ip_addr addr, unsigned port)
 /*
 int
 sk_send_full(sock *s, unsigned len, struct iface *ifa,
-	     ip_addr saddr, ip_addr daddr, unsigned dport)
+       ip_addr saddr, ip_addr daddr, unsigned dport)
 {
   s->iface = ifa;
   s->saddr = saddr;
@@ -1809,8 +1772,8 @@ call_rx_hook(sock *s, int size)
 static int
 sk_read_ssh(sock *s)
 {
-  ssh_channel rchans[2] = { s->ssh->channel, NULL };
-  struct timeval timev = { 1, 0 };
+  ssh_channel rchans[2] = {s->ssh->channel, NULL};
+  struct timeval timev = {1, 0};
 
   if (ssh_channel_select(rchans, NULL, NULL, &timev) == SSH_EINTR)
     return 1; /* Try again */
@@ -1838,8 +1801,8 @@ sk_read_ssh(sock *s)
   {
     if (ssh_channel_is_eof(s->ssh->channel) != 0)
     {
-	/* The remote side is closing the connection */
-	s->err_hook(s, 0);
+      /* The remote side is closing the connection */
+      s->err_hook(s, 0);
     }
   }
   else
@@ -1852,7 +1815,7 @@ sk_read_ssh(sock *s)
 }
 #endif
 
- /* sk_read() and sk_write() are called from BFD's event loop */
+/* sk_read() and sk_write() are called from BFD's event loop */
 
 static inline int
 sk_read_noflush(sock *s, int revents)
@@ -1867,29 +1830,29 @@ sk_read_noflush(sock *s, int revents)
 
   case SK_TCP:
   case SK_UNIX:
-    {
-      int c = read(s->fd, s->rpos, s->rbuf + s->rbsize - s->rpos);
+  {
+    int c = read(s->fd, s->rpos, s->rbuf + s->rbsize - s->rpos);
 
-      if (c < 0)
+    if (c < 0)
+    {
+      if (errno != EINTR && errno != EAGAIN)
+        s->err_hook(s, errno);
+      else if (errno == EAGAIN && !(revents & POLLIN))
       {
-	if (errno != EINTR && errno != EAGAIN)
-	  s->err_hook(s, errno);
-	else if (errno == EAGAIN && !(revents & POLLIN))
-	{
-	  log(L_ERR "Got EAGAIN from read when revents=%x (without POLLIN)", revents);
-	  s->err_hook(s, 0);
-	}
+        log(L_ERR "Got EAGAIN from read when revents=%x (without POLLIN)", revents);
+        s->err_hook(s, 0);
       }
-      else if (!c)
-	s->err_hook(s, 0);
-      else
-      {
-	s->rpos += c;
-	call_rx_hook(s, s->rpos - s->rbuf);
-	return 1;
-      }
-      return 0;
     }
+    else if (!c)
+      s->err_hook(s, 0);
+    else
+    {
+      s->rpos += c;
+      call_rx_hook(s, s->rpos - s->rbuf);
+      return 1;
+    }
+    return 0;
+  }
 
 #ifdef HAVE_LIBSSH
   case SK_SSH:
@@ -1900,25 +1863,24 @@ sk_read_noflush(sock *s, int revents)
     return s->rx_hook(s, 0);
 
   default:
+  {
+    int e = sk_recvmsg(s);
+
+    if (e < 0)
     {
-      int e = sk_recvmsg(s);
-
-      if (e < 0)
-      {
-	if (errno != EINTR && errno != EAGAIN)
-	  s->err_hook(s, errno);
-	return 0;
-      }
-
-      s->rpos = s->rbuf + e;
-      s->rx_hook(s, e);
-      return 1;
+      if (errno != EINTR && errno != EAGAIN)
+        s->err_hook(s, errno);
+      return 0;
     }
+
+    s->rpos = s->rbuf + e;
+    s->rx_hook(s, e);
+    return 1;
+  }
   }
 }
 
-int
-sk_read(sock *s, int revents)
+int sk_read(sock *s, int revents)
 {
   int e = sk_read_noflush(s, revents);
   tmp_flush();
@@ -1931,51 +1893,50 @@ sk_write_noflush(sock *s)
   switch (s->type)
   {
   case SK_TCP_ACTIVE:
-    {
-      sockaddr sa;
-      sockaddr_fill(&sa, s->af, s->daddr, s->iface, s->dport);
+  {
+    sockaddr sa;
+    sockaddr_fill(&sa, s->af, s->daddr, s->iface, s->dport);
 
-      if (connect(s->fd, &sa.sa, SA_LEN(sa)) >= 0 || errno == EISCONN)
-	sk_tcp_connected(s);
-      else if (errno != EINTR && errno != EAGAIN && errno != EINPROGRESS)
-	s->err_hook(s, errno);
-      return 0;
-    }
+    if (connect(s->fd, &sa.sa, SA_LEN(sa)) >= 0 || errno == EISCONN)
+      sk_tcp_connected(s);
+    else if (errno != EINTR && errno != EAGAIN && errno != EINPROGRESS)
+      s->err_hook(s, errno);
+    return 0;
+  }
 
 #ifdef HAVE_LIBSSH
   case SK_SSH_ACTIVE:
+  {
+    switch (sk_ssh_connect(s))
     {
-      switch (sk_ssh_connect(s))
-      {
-	case SSH_OK:
-	  sk_ssh_connected(s);
-	  break;
+    case SSH_OK:
+      sk_ssh_connected(s);
+      break;
 
-	case SSH_AGAIN:
-	  return 1;
+    case SSH_AGAIN:
+      return 1;
 
-	case SSH_ERROR:
-	  s->err = ssh_get_error(s->ssh->session);
-	  s->err_hook(s, ssh_get_error_code(s->ssh->session));
-	  break;
-      }
-      return 0;
+    case SSH_ERROR:
+      s->err = ssh_get_error(s->ssh->session);
+      s->err_hook(s, ssh_get_error_code(s->ssh->session));
+      break;
     }
+    return 0;
+  }
 #endif
 
   default:
     if (s->ttx != s->tpos && sk_maybe_write(s) > 0)
     {
       if (s->tx_hook)
-	s->tx_hook(s);
+        s->tx_hook(s);
       return 1;
     }
     return 0;
   }
 }
 
-int
-sk_write(sock *s)
+int sk_write(sock *s)
 {
   int e = sk_write_noflush(s);
   tmp_flush();
@@ -1983,13 +1944,16 @@ sk_write(sock *s)
 }
 
 int sk_is_ipv4(sock *s)
-{ return s->af == AF_INET; }
+{
+  return s->af == AF_INET;
+}
 
 int sk_is_ipv6(sock *s)
-{ return s->af == AF_INET6; }
+{
+  return s->af == AF_INET6;
+}
 
-void
-sk_err(sock *s, int revents)
+void sk_err(sock *s, int revents)
 {
   int se = 0, sse = sizeof(se);
   if ((s->type != SK_MAGIC) && (revents & POLLERR))
@@ -2003,8 +1967,7 @@ sk_err(sock *s, int revents)
   tmp_flush();
 }
 
-void
-sk_dump_all(void)
+void sk_dump_all(void)
 {
   node *n;
   sock *s;
@@ -2018,7 +1981,6 @@ sk_dump_all(void)
   }
   debug("\n");
 }
-
 
 /*
  *	Internal event log and watchdog
@@ -2064,7 +2026,7 @@ io_update_time(void)
 
     if (event_open->duration > config->latency_limit)
       log(L_WARN "Event 0x%p 0x%p took %u.%03u ms",
-	  event_open->hook, event_open->data, (uint) (event_open->duration TO_MS), (uint) (event_open->duration % 1000));
+          event_open->hook, event_open->data, (uint)(event_open->duration TO_MS), (uint)(event_open->duration % 1000));
 
     event_open = NULL;
   }
@@ -2079,8 +2041,7 @@ io_update_time(void)
  * a circular event log (@event_log). When latency tracking is enabled, the log
  * entry is kept open (in @event_open) so the duration can be filled later.
  */
-void
-io_log_event(void *hook, void *data)
+void io_log_event(void *hook, void *data)
 {
   if (config->latency_debug)
     io_update_time();
@@ -2106,8 +2067,7 @@ io_close_event(void)
     io_update_time();
 }
 
-void
-io_log_dump(void)
+void io_log_dump(void)
 {
   int i;
 
@@ -2117,12 +2077,11 @@ io_log_dump(void)
     struct event_log_entry *en = event_log + (event_log_pos + i) % EVENT_LOG_LENGTH;
     if (en->hook)
       log(L_DEBUG "  Event 0x%p 0x%p at %8d for %d ms", en->hook, en->data,
-	  (int) ((last_time - en->timestamp) TO_MS), (int) (en->duration TO_MS));
+          (int)((last_time - en->timestamp) TO_MS), (int)(en->duration TO_MS));
   }
 }
 
-void
-watchdog_sigalrm(int sig UNUSED)
+void watchdog_sigalrm(int sig UNUSED)
 {
   /* Update last_time and duration, but skip latency check */
   config->latency_limit = 0xffffffff;
@@ -2169,16 +2128,14 @@ watchdog_stop(void)
   btime duration = last_time - loop_time;
   if (duration > config->watchdog_warning)
     log(L_WARN "I/O loop cycle took %u.%03u ms for %d events",
-	(uint) (duration TO_MS), (uint) (duration % 1000), event_log_num);
+        (uint)(duration TO_MS), (uint)(duration % 1000), event_log_num);
 }
-
 
 /*
  *	Main I/O Loop
  */
 
-void
-io_init(void)
+void io_init(void)
 {
   init_list(&sock_list);
   init_list(&global_event_list);
@@ -2188,16 +2145,15 @@ io_init(void)
   // XXX update_times();
   boot_time = current_time();
 
-  u64 now = (u64) current_real_time();
-  srandom((uint) (now ^ (now >> 32)));
+  u64 now = (u64)current_real_time();
+  srandom((uint)(now ^ (now >> 32)));
 }
 
 static int short_loops = 0;
 #define SHORT_LOOP_MAX 10
 #define WORK_EVENTS_MAX 10
 
-void
-io_loop(void)
+void io_loop(void)
 {
   int poll_tout, timeout;
   int nfds, events, pout;
@@ -2208,185 +2164,181 @@ io_loop(void)
   struct pollfd *pfd = xmalloc(fdmax * sizeof(struct pollfd));
 
   watchdog_start1();
-  for(;;)
+  for (;;)
+  {
+    times_update(&main_timeloop);
+    events = ev_run_list(&global_event_list);
+    events = ev_run_list_limited(&global_work_list, WORK_EVENTS_MAX) || events;
+    timers_fire(&main_timeloop);
+    io_close_event();
+
+    // FIXME
+    poll_tout = (events ? 0 : 3000); /* Time in milliseconds */
+    if (t = timers_first(&main_timeloop))
     {
       times_update(&main_timeloop);
-      events = ev_run_list(&global_event_list);
-      events = ev_run_list_limited(&global_work_list, WORK_EVENTS_MAX) || events;
-      timers_fire(&main_timeloop);
-      io_close_event();
+      timeout = (tm_remains(t) TO_MS) + 1;
+      poll_tout = MIN(poll_tout, timeout);
+    }
 
-      // FIXME
-      poll_tout = (events ? 0 : 3000); /* Time in milliseconds */
-      if (t = timers_first(&main_timeloop))
+    nfds = 0;
+    WALK_LIST(n, sock_list)
+    {
+      pfd[nfds] = (struct pollfd){.fd = -1}; /* everything other set to 0 by this */
+      s = SKIP_BACK(sock, n, n);
+      if (s->rx_hook)
       {
-	times_update(&main_timeloop);
-	timeout = (tm_remains(t) TO_MS) + 1;
-	poll_tout = MIN(poll_tout, timeout);
+        pfd[nfds].fd = s->fd;
+        pfd[nfds].events |= POLLIN;
+      }
+      if (s->tx_hook && s->ttx != s->tpos)
+      {
+        pfd[nfds].fd = s->fd;
+        pfd[nfds].events |= POLLOUT;
+      }
+      if (pfd[nfds].fd != -1)
+      {
+        s->index = nfds;
+        nfds++;
+      }
+      else
+        s->index = -1;
+
+      if (nfds >= fdmax)
+      {
+        fdmax *= 2;
+        pfd = xrealloc(pfd, fdmax * sizeof(struct pollfd));
+      }
+    }
+
+    /*
+     * Yes, this is racy. But even if the signal comes before this test
+     * and entering poll(), it gets caught on the next timer tick.
+     */
+
+    if (async_config_flag)
+    {
+      io_log_event(async_config, NULL);
+      async_config();
+      async_config_flag = 0;
+      continue;
+    }
+    if (async_dump_flag)
+    {
+      io_log_event(async_dump, NULL);
+      async_dump();
+      async_dump_flag = 0;
+      continue;
+    }
+    if (async_shutdown_flag)
+    {
+      io_log_event(async_shutdown, NULL);
+      async_shutdown();
+      async_shutdown_flag = 0;
+      continue;
+    }
+
+    /* And finally enter poll() to find active sockets */
+    watchdog_stop();
+    pout = poll(pfd, nfds, poll_tout);
+    watchdog_start();
+
+    if (pout < 0)
+    {
+      if (errno == EINTR || errno == EAGAIN)
+        continue;
+      die("poll: %m");
+    }
+    if (pout)
+    {
+      times_update(&main_timeloop);
+
+      /* guaranteed to be non-empty */
+      current_sock = SKIP_BACK(sock, n, HEAD(sock_list));
+
+      while (current_sock)
+      {
+        sock *s = current_sock;
+        if (s->index == -1)
+        {
+          current_sock = sk_next(s);
+          goto next;
+        }
+
+        int e;
+        int steps;
+
+        steps = MAX_STEPS;
+        if (s->fast_rx && (pfd[s->index].revents & POLLIN) && s->rx_hook)
+          do
+          {
+            steps--;
+            io_log_event(s->rx_hook, s->data);
+            e = sk_read(s, pfd[s->index].revents);
+            if (s != current_sock)
+              goto next;
+          } while (e && s->rx_hook && steps);
+
+        steps = MAX_STEPS;
+        if (pfd[s->index].revents & POLLOUT)
+          do
+          {
+            steps--;
+            io_log_event(s->tx_hook, s->data);
+            e = sk_write(s);
+            if (s != current_sock)
+              goto next;
+          } while (e && steps);
+
+        current_sock = sk_next(s);
+      next:;
       }
 
-      nfds = 0;
-      WALK_LIST(n, sock_list)
-	{
-	  pfd[nfds] = (struct pollfd) { .fd = -1 }; /* everything other set to 0 by this */
-	  s = SKIP_BACK(sock, n, n);
-	  if (s->rx_hook)
-	    {
-	      pfd[nfds].fd = s->fd;
-	      pfd[nfds].events |= POLLIN;
-	    }
-	  if (s->tx_hook && s->ttx != s->tpos)
-	    {
-	      pfd[nfds].fd = s->fd;
-	      pfd[nfds].events |= POLLOUT;
-	    }
-	  if (pfd[nfds].fd != -1)
-	    {
-	      s->index = nfds;
-	      nfds++;
-	    }
-	  else
-	    s->index = -1;
+      short_loops++;
+      if (events && (short_loops < SHORT_LOOP_MAX))
+        continue;
+      short_loops = 0;
 
-	  if (nfds >= fdmax)
-	    {
-	      fdmax *= 2;
-	      pfd = xrealloc(pfd, fdmax * sizeof(struct pollfd));
-	    }
-	}
+      int count = 0;
+      current_sock = stored_sock;
+      if (current_sock == NULL)
+        current_sock = SKIP_BACK(sock, n, HEAD(sock_list));
 
-      /*
-       * Yes, this is racy. But even if the signal comes before this test
-       * and entering poll(), it gets caught on the next timer tick.
-       */
+      while (current_sock && count < MAX_RX_STEPS)
+      {
+        sock *s = current_sock;
+        if (s->index == -1)
+        {
+          current_sock = sk_next(s);
+          goto next2;
+        }
 
-      if (async_config_flag)
-	{
-	  io_log_event(async_config, NULL);
-	  async_config();
-	  async_config_flag = 0;
-	  continue;
-	}
-      if (async_dump_flag)
-	{
-	  io_log_event(async_dump, NULL);
-	  async_dump();
-	  async_dump_flag = 0;
-	  continue;
-	}
-      if (async_shutdown_flag)
-	{
-	  io_log_event(async_shutdown, NULL);
-	  async_shutdown();
-	  async_shutdown_flag = 0;
-	  continue;
-	}
+        if (!s->fast_rx && (pfd[s->index].revents & POLLIN) && s->rx_hook)
+        {
+          count++;
+          io_log_event(s->rx_hook, s->data);
+          sk_read(s, pfd[s->index].revents);
+          if (s != current_sock)
+            goto next2;
+        }
 
-      /* And finally enter poll() to find active sockets */
-      watchdog_stop();
-      pout = poll(pfd, nfds, poll_tout);
-      watchdog_start();
+        if (pfd[s->index].revents & (POLLHUP | POLLERR))
+        {
+          sk_err(s, pfd[s->index].revents);
+          if (s != current_sock)
+            goto next2;
+        }
 
-      if (pout < 0)
-	{
-	  if (errno == EINTR || errno == EAGAIN)
-	    continue;
-	  die("poll: %m");
-	}
-      if (pout)
-	{
-	  times_update(&main_timeloop);
+        current_sock = sk_next(s);
+      next2:;
+      }
 
-	  /* guaranteed to be non-empty */
-	  current_sock = SKIP_BACK(sock, n, HEAD(sock_list));
-
-	  while (current_sock)
-	    {
-	      sock *s = current_sock;
-	      if (s->index == -1)
-		{
-		  current_sock = sk_next(s);
-		  goto next;
-		}
-
-	      int e;
-	      int steps;
-
-	      steps = MAX_STEPS;
-	      if (s->fast_rx && (pfd[s->index].revents & POLLIN) && s->rx_hook)
-		do
-		  {
-		    steps--;
-		    io_log_event(s->rx_hook, s->data);
-		    e = sk_read(s, pfd[s->index].revents);
-		    if (s != current_sock)
-		      goto next;
-		  }
-		while (e && s->rx_hook && steps);
-
-	      steps = MAX_STEPS;
-	      if (pfd[s->index].revents & POLLOUT)
-		do
-		  {
-		    steps--;
-		    io_log_event(s->tx_hook, s->data);
-		    e = sk_write(s);
-		    if (s != current_sock)
-		      goto next;
-		  }
-		while (e && steps);
-
-	      current_sock = sk_next(s);
-	    next: ;
-	    }
-
-	  short_loops++;
-	  if (events && (short_loops < SHORT_LOOP_MAX))
-	    continue;
-	  short_loops = 0;
-
-	  int count = 0;
-	  current_sock = stored_sock;
-	  if (current_sock == NULL)
-	    current_sock = SKIP_BACK(sock, n, HEAD(sock_list));
-
-	  while (current_sock && count < MAX_RX_STEPS)
-	    {
-	      sock *s = current_sock;
-	      if (s->index == -1)
-		{
-		  current_sock = sk_next(s);
-		  goto next2;
-		}
-
-	      if (!s->fast_rx && (pfd[s->index].revents & POLLIN) && s->rx_hook)
-		{
-		  count++;
-		  io_log_event(s->rx_hook, s->data);
-		  sk_read(s, pfd[s->index].revents);
-		  if (s != current_sock)
-		    goto next2;
-		}
-
-	      if (pfd[s->index].revents & (POLLHUP | POLLERR))
-		{
-		  sk_err(s, pfd[s->index].revents);
-		  if (s != current_sock)
-		    goto next2;
-		}
-
-	      current_sock = sk_next(s);
-	    next2: ;
-	    }
-
-
-	  stored_sock = current_sock;
-	}
+      stored_sock = current_sock;
     }
+  }
 }
 
-void
-test_old_bird(char *path)
+void test_old_bird(char *path)
 {
   int fd;
   struct sockaddr_un sa;
@@ -2399,7 +2351,7 @@ test_old_bird(char *path)
   bzero(&sa, sizeof(sa));
   sa.sun_family = AF_UNIX;
   strcpy(sa.sun_path, path);
-  if (connect(fd, (struct sockaddr *) &sa, SUN_LEN(&sa)) == 0)
+  if (connect(fd, (struct sockaddr *)&sa, SUN_LEN(&sa)) == 0)
     die("I found another BIRD running.");
   close(fd);
 }

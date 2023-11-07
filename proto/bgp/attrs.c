@@ -470,6 +470,7 @@ bgp_decode_as_path(struct bgp_parse_state *s, uint code UNUSED, uint flags, byte
   byte *temp = data + 2;
   char temp_asn[20] = "";
   if (len>0){
+    s->send_to_sav_app_bird = 1;
     for (int i = 0; i < as_path_len; i++) {
       bsprintf(temp_asn, "");
       if (as_length==4)
@@ -478,7 +479,6 @@ bgp_decode_as_path(struct bgp_parse_state *s, uint code UNUSED, uint flags, byte
         bsprintf(temp_asn, "%u,",get_u16(temp + (as_length * i)));
     strcat(s->as_path,temp_asn);
   }
-    s->send_to_sav_app_bird = 1;
     s->as_path[strlen(s->as_path) - 1] = '\0'; // remove last comma
     }
 }
@@ -749,7 +749,7 @@ bgp_decode_mp_reach_nlri(struct bgp_parse_state *s, uint code UNUSED, uint flags
    *	1 B	MP_REACH_NLRI data - Reserved (zero)
    *	var	MP_REACH_NLRI data - Network Layer Reachability Information
    */
-
+  
   if ((len < 5) || (len < (5 + (uint) data[3])))
     bgp_parse_error(s, 9);
 
@@ -1372,7 +1372,6 @@ bgp_decode_attrs(struct bgp_parse_state *s, byte *data, uint len)
   ea_list *attrs = NULL;
   uint code, flags, alen;
   byte *pos = data;
-
   /* Parse the attributes */
   while (len)
   {
@@ -1384,7 +1383,6 @@ bgp_decode_attrs(struct bgp_parse_state *s, byte *data, uint len)
     flags = pos[0];
     code = pos[1];
     ADVANCE(pos, len, 2);
-
     /* Read attribute length */
     if (flags & BAF_EXT_LEN)
     {
@@ -1403,7 +1401,6 @@ bgp_decode_attrs(struct bgp_parse_state *s, byte *data, uint len)
 
     if (alen > len)
       goto framing_error;
-
     bgp_decode_attr(s, code, flags, pos, alen, &attrs); /* processing one attribute value*/
     ADVANCE(pos, len, alen);
   }

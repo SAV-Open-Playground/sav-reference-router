@@ -27,6 +27,7 @@
 #include "nest/cli.h"
 #include "lib/lists.h"
 #include "bgp.h"
+#include <lib/cJSON.h>
 
 #define BGP_RR_REQUEST 0
 #define BGP_RR_BEGIN 1
@@ -1470,10 +1471,6 @@ bgp_update_next_hop_none(struct bgp_export_state *s, eattr *a, ea_list **to)
         bgp_unset_attr(to, s->pool, BA_NEXT_HOP);
 }
 
-/*
- *	UPDATE
- */
-
 static void
 bgp_rte_update(struct bgp_parse_state *s, const net_addr *n, u32 path_id, rta *a0)
 {
@@ -2212,9 +2209,33 @@ bgp_decode_nlri_rpdp4(struct bgp_parse_state *s, byte *pos, uint len, rta *a)
         }
     }
     result_str[strlen(result_str) - 1] = '\0';
-    strcat(s->sav_nlri, result_str);
+    strcat(s->spa_add, result_str);
     // log("s->sav_nlri: [%s]", s->sav_nlri);
     return;
+}
+static void log_data(byte *pos, uint len, char *name)
+{
+    byte *this_pos = pos;
+    int count = 0;
+    while (count < len)
+    {
+        log("%s [%d]: %d", name, count, get_u8(this_pos));
+        this_pos += 1;
+        count += 1;
+    }
+    return;
+}
+static void
+bgp_decode_nlri_rpdp6(struct bgp_parse_state *s, byte *pos, uint len, rta *a)
+{
+    while (len)
+    {
+        bsprintf(s->temp_u8, "");
+        bsprintf(s->temp_u8, "%u,", get_u8(pos));
+        strcat(s->spa_add, s->temp_u8);
+        ADVANCE(pos, len, 1);
+    }
+    s->spa_add[strlen(s->spa_add) - 1] = '\0';
 }
 
 // end of rpdp nlri processing block
@@ -2360,7 +2381,7 @@ static const struct bgp_af_desc bgp_af_table[] = {
         .net = NET_IP6,
         .name = "rpdp6",
         .encode_nlri = bgp_encode_nlri_ip6,
-        .decode_nlri = bgp_decode_nlri_ip6,
+        .decode_nlri = bgp_decode_nlri_rpdp6,
         .encode_next_hop = bgp_encode_next_hop_ip,
         .decode_next_hop = bgp_decode_next_hop_ip,
         .update_next_hop = bgp_update_next_hop_ip,
@@ -2705,7 +2726,6 @@ bgp_decode_nlri(struct bgp_parse_state *s, u32 afi, byte *nlri, uint len, ea_lis
     }
     // decode nlri using channel specific function
     c->desc->decode_nlri(s, nlri, len, a);
-
     rta_free(s->cached_rta);
     s->cached_rta = NULL;
 }
@@ -2720,7 +2740,7 @@ bgp_rx_update(struct bgp_conn *conn, byte *pkt, uint len)
     BGP_TRACE_RL(&rl_rcv_update, D_PACKETS, "Got UPDATE");
     p->last_rx_update = current_time();
     p->stats.rx_updates++;
-
+    // log_data(pkt, len, "bgp_rx_update");
     /* Workaround for some BGP implementations that skip initial KEEPALIVE */
     if (conn->state == BS_OPENCONFIRM)
         bgp_conn_enter_established_state(conn);
@@ -2747,7 +2767,10 @@ bgp_rx_update(struct bgp_conn *conn, byte *pkt, uint len)
         .sav_origin = "",
         .routes = "",
         .sav_scope = "",
-        .sav_nlri = ""
+        .spa_add = "",
+        .spa_del = "",
+        .spd_add = "",
+        .spd_del = "",
         // .incoming_interface = conn->sk->iface,
     };
     /* Parse error handler */
@@ -2766,7 +2789,6 @@ bgp_rx_update(struct bgp_conn *conn, byte *pkt, uint len)
 
     /* Skip fixed header */
     uint pos = 19;
-
     /*
      *	UPDATE message format
      *
@@ -2781,22 +2803,22 @@ bgp_rx_update(struct bgp_conn *conn, byte *pkt, uint len)
     pos += 2 + s.ip_unreach_len;           /*Position of where the withdrawn routes ends*/
     if (pos + 2 > len)
         bgp_parse_error(&s, 1);
-
+    // log("ip_unreach_nlri pass");
     s.attr_len = get_u16(pkt + pos); /*length of attributes*/
     s.attrs = pkt + pos + 2;         /*Position of where the attributes starts*/
     pos += 2 + s.attr_len;           /*Position of where the attributes ends*/
-
     if (pos > len)
         bgp_parse_error(&s, 1);
-
+    // log("attributes length pass");
     s.ip_reach_len = len - pos; /*length of routes*/
     s.ip_reach_nlri = pkt + pos;
-
+    // log_data(s.attrs,s.attr_len,"s.attr");
     // log("\nip_unreach_len: %d\nip_reach_len: %d", s.ip_unreach_len, s.ip_reach_len);
     if (s.attr_len)
         ea = bgp_decode_attrs(&s, s.attrs, s.attr_len); /*Processing Attributes,s.mp_reach_len is set here*/
     else
         ea = NULL;
+    // log("bgp_decode_attrs done");
     // mp_reach_len is set after attributes decoded
     // log("\nmp_reach_len: %d\nmp_unreach_len: %d", s.mp_reach_len, s.mp_unreach_len);
     /* Check for End-of-RIB marker */
@@ -2805,7 +2827,6 @@ bgp_rx_update(struct bgp_conn *conn, byte *pkt, uint len)
         bgp_rx_end_mark(&s, BGP_AF_IPV4);
         goto done;
     } /*Noting to process*/
-
     /* Check for MP End-of-RIB marker */
     if ((s.attr_len < 8) && !s.ip_unreach_len && !s.ip_reach_len &&
         !s.mp_reach_len && !s.mp_unreach_len && s.mp_unreach_af)
@@ -2814,13 +2835,11 @@ bgp_rx_update(struct bgp_conn *conn, byte *pkt, uint len)
         goto done;
     }
     /*Below is where processing the "actual" unreach/withdraw info*/
-
     if (s.ip_unreach_len)
         bgp_decode_nlri(&s, BGP_AF_IPV4, s.ip_unreach_nlri, s.ip_unreach_len, NULL, NULL, 0);
 
     if (s.mp_unreach_len)
         bgp_decode_nlri(&s, s.mp_unreach_af, s.mp_unreach_nlri, s.mp_unreach_len, NULL, NULL, 0);
-
     s.reach_nlri_step = 1;
     /*Below is where processing the "actual" nlri info*/
     if (s.ip_reach_len)
@@ -2830,33 +2849,39 @@ bgp_rx_update(struct bgp_conn *conn, byte *pkt, uint len)
         bgp_decode_nlri(&s, s.mp_reach_af, s.mp_reach_nlri, s.mp_reach_len,
                         ea, s.mp_next_hop_data, s.mp_next_hop_len);
 done:
-    log("2832 %u %u", s.mp_reach_af,s.mp_unreach_af);
+    log("bgp_rx_update done %u %u", s.mp_reach_af, s.mp_unreach_af);
     rta_free(s.cached_rta);
     lp_restore(tmp_linpool, &tmpp); /*restore local state*/
-    if (s.send_to_sav_app_bird == 1)
+    // if (s.send_to_sav_app_bird == 1)
+    if (conn->bgp->remote_as != NULL)
     {
+        log("sending to agent");
         s.routes[strlen(s.routes) - 1] = '\0'; // removing ending comma
         char temp[2048] = "";
-        bsprintf(temp, "{\"msg_type\":\"bgp_update\"\n,\"msg\":{\n\
-      \"neighbor_as\":\"%lu\"\n\
-    ,\"interface_name\":\"%s\"\n\
-    ,\"interface_index\":\"%u\"\n\
-    ,\"protocol_name\":\"%s\"\n\
-    ,\"as_path\":\"%s\"\n\
-    ,\"sav_origin\":\"%s\"\n\
-    ,\"routes\":\"%s\"\n\
-    ,\"sav_scope\":\"%s\"\n\
-    ,\"sav_nlri\":\"%s\"\
-    ,\"channels\":\"",
-                 conn->bgp->remote_as,
-                 conn->bgp->cf->iface->name,
-                 s.incoming_interface,
-                 conn->bgp->cf->c.name,
-                 s.as_path,
-                 s.sav_origin,
-                 s.routes,
-                 s.sav_scope,
-                 s.sav_nlri);
+        if (strlen(s.spa_add) == 0 &&
+            strlen(s.spa_del) == 0 &&
+            strlen(s.spd_add) == 0 &&
+            strlen(s.spd_del) == 0)
+            bsprintf(temp, "{\"msg_type\":\"bgp_update\"\n,\"msg\":{\n\
+           \"protocol_name\":\"%s\"\n\
+           ,\"channels\":\"",
+                     conn->bgp->cf->c.name);
+        else
+            bsprintf(temp, "{\"msg_type\":\"rpdp_update\"\n,\"msg\":{\n\
+        \"protocol_name\":\"%s\"\n\
+        ,\"sav_origin\":\"%s\"\n\
+        ,\"routes\":\"%s\"\n\
+        ,\"sav_scope\":\"%s\"\n\
+        ,\"spa_add\":[%s]\
+        ,\"spa_del\":[%s]\
+        ,\"channels\":\"",
+
+                     conn->bgp->cf->c.name,
+                     s.sav_origin,
+                     s.routes,
+                     s.sav_scope,
+                     s.spa_add,
+                     s.spa_del);
         struct bgp_channel *c;
         BGP_WALK_CHANNELS(conn->bgp, c)
         {
@@ -2869,21 +2894,26 @@ done:
         temp[strlen(temp) - 1] = '\0';
         strcat(temp, "\"}}");
         // send_to_agent(temp);
-        if (strlen(s.sav_nlri) == 0)
+        if (strlen(s.spa_add) == 0)
         {
             log("BGP UPDATE PROCESSING STARTED at %ld", (tv.tv_usec / 1000) + (tv.tv_sec * 1000));
             gettimeofday(&tv, NULL);
             log("BGP UPDATE PROCESSING FINISHED at %ld", (tv.tv_usec / 1000) + (tv.tv_sec * 1000));
-        } else {
+        }
+        else
+        {
             log("SAV UPDATE PROCESSING STARTED at %ld", (tv.tv_usec / 1000) + (tv.tv_sec * 1000));
             gettimeofday(&tv, NULL);
             log("SAV UPDATE PROCESSING FINISHED at %ld", (tv.tv_usec / 1000) + (tv.tv_sec * 1000));
         }
+        // log("msg ready");
+        // log(temp);
         send_to_agent(temp);
+        log("BGP UPDATE SENT TO AGENT");
     }
     else
     {
-        // log("not sending to agent");
+        log("not sending to agent");
     }
     return;
 }
@@ -2994,6 +3024,79 @@ bgp_create_end_refresh(struct bgp_channel *c, byte *buf)
     return buf + 4;
 }
 
+static process_spd(struct bgp_proto *p, byte *pkt, uint len)
+{
+    // log_data(pkt, len, "packet");
+    cJSON *ret = cJSON_CreateObject();
+    cJSON_AddStringToObject(ret, "protocol_name", p->p.name);
+
+    struct bgp_channel *c = bgp_get_channel(p, get_af4(pkt + 19));
+    if (!c)
+    {
+        log(L_WARN "%s: Got ROUTE-REFRESH subtype %u for AF %u.%u, ignoring",
+            p->p.name, pkt[21], get_u16(pkt + 19), pkt[22]);
+        return;
+    }
+    char channels_str[1024] = "";
+    WALK_LIST(c, p->p.channels)
+    {
+        strcat(channels_str, c->c.name);
+        strcat(channels_str, ",");
+    }
+    channels_str[strlen(channels_str) - 1] = '\0';
+    cJSON_AddStringToObject(ret, "channels", channels_str);
+    byte *cur_pos = pkt;
+    ADVANCE(cur_pos, len, 19);
+    int afi = get_u16(cur_pos);
+    // log("afi: %u", afi);
+    if (afi == NET_IP4)
+        cJSON_AddNumberToObject(ret, "ip_version", 4);
+    else if (afi == NET_IP6)
+        cJSON_AddNumberToObject(ret, "ip_version", 6);
+    else
+        cJSON_AddNumberToObject(ret, "ip_version", -1);
+    ADVANCE(cur_pos, len, 2);
+    int subtype = get_u8(cur_pos);
+    ADVANCE(cur_pos, len, 1);
+    cJSON_AddNumberToObject(ret, "route_refresh_subtype", subtype);
+    int safi = get_u8(cur_pos);
+    ADVANCE(cur_pos, len, 1);
+    if (safi != BGP_SAFI_RPDP)
+    {
+        log("ERROR: SAFI is not RPDP");
+        return;
+    }
+    cJSON_AddNumberToObject(ret, "safi", BGP_SAFI_RPDP);
+
+    cJSON_AddNumberToObject(ret, "type", get_u16(cur_pos));
+    ADVANCE(cur_pos, len, 2);
+    cJSON_AddNumberToObject(ret, "sub_type", get_u8(cur_pos));
+    ADVANCE(cur_pos, len, 1);
+    int spd_len = get_u16(cur_pos);
+    ADVANCE(cur_pos, len, 2);
+    cJSON_AddNumberToObject(ret, "SN", get_u32(cur_pos));
+    ADVANCE(cur_pos, len, 4);
+    cJSON_AddNumberToObject(ret, "origin_id", get_u32(cur_pos));
+    ADVANCE(cur_pos, len, 4);
+    int opt_len = get_u16(cur_pos);
+    ADVANCE(cur_pos, len, 2);
+    cJSON *opt_data = cJSON_CreateArray();
+    for (int i = 0; i < opt_len; i++)
+    {
+        cJSON_AddItemToArray(opt_data, cJSON_CreateNumber(get_u8(cur_pos)));
+        ADVANCE(cur_pos, len, 1);
+    }
+    cJSON_AddArrayToObject(opt_data, "opt_data");
+    cJSON_AddArrayToObject(cJSON_CreateIntArray(cur_pos, len), "addresses");
+    ADVANCE(cur_pos, len, len);
+    cJSON *json_to_send = cJSON_CreateObject();
+    cJSON_AddStringToObject(json_to_send, "msg_type", "rpdp_route_refresh");
+    cJSON_AddItemToObject(json_to_send, "msg", ret);
+    log("json_to_send: %s", cJSON_Print(json_to_send));
+    send_to_agent(cJSON_Print(json_to_send));
+    log_data(cur_pos, len, "spd_remaining");
+    cJSON_Delete(json_to_send);
+}
 static void
 bgp_rx_route_refresh(struct bgp_conn *conn, byte *pkt, uint len)
 {
@@ -3019,8 +3122,12 @@ bgp_rx_route_refresh(struct bgp_conn *conn, byte *pkt, uint len)
 
     if (len > (BGP_HEADER_LENGTH + 4))
     {
-        bgp_error(conn, 7, 1, pkt, MIN(len, 2048));
-        return;
+        log("entering processing spd");
+        return process_spd(p, pkt, len);
+        // log_data(pkt,len,"bgp_rx_route_refresh");
+        // log("len: %u", len);
+        // bgp_error(conn, 7, 1, pkt, MIN(len, 2048));
+        // return;
     }
 
     struct bgp_channel *c = bgp_get_channel(p, get_af4(pkt + 19));

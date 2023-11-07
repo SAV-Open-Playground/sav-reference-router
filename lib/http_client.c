@@ -31,7 +31,7 @@ put_af3(byte *buf, u32 id)
     buf[2] = id & 0xff;
 }
 byte *
-insert_json_key(byte *pos, cJSON *input_json, char *key)
+insert_json_key_str(byte *pos, cJSON *input_json, char *key)
 {
     char input[1024];
     bsprintf(input, cJSON_GetObjectItem(input_json, key)->valuestring);
@@ -44,6 +44,33 @@ insert_json_key(byte *pos, cJSON *input_json, char *key)
         token = strtok(NULL, ",");
     }
     return pos;
+}
+byte *
+insert_json_key_int(byte *pos, cJSON *input_json, char *key)
+{
+    cJSON *temp = NULL;
+    temp = cJSON_GetObjectItem(input_json, key)->child;
+    while (temp != NULL)
+    {
+        pos = insert_u8(pos, temp->valueint);
+        temp = temp->next;
+    }
+    return pos;
+}
+static inline int
+bgp_send(struct bgp_conn *conn, uint type, uint len)
+{
+    sock *sk = conn->sk;
+    byte *buf = sk->tbuf;
+
+    conn->bgp->stats.tx_messages++;
+    conn->bgp->stats.tx_bytes += len;
+
+    memset(buf, 0xff, 16); /* Marker */
+    put_u16(buf + 16, len);
+    buf[18] = type;
+
+    return sk_send(sk, len);
 }
 static inline int
 bgp_put_attr_hdr(byte *buf, uint code, uint flags, uint len)
@@ -79,7 +106,7 @@ int bird_send(struct bgp_proto *p, cJSON *input_json)
 }
 int bird_send_bgp(struct bgp_proto *p, cJSON *input_json)
 {
-    log("bird_send_bgp");
+    log("bird_send_native_bgp");
     struct bgp_conn *conn = p->conn;
     byte *cur_pos, *end, *buf_start, *buf_end;
     uint type;
@@ -101,13 +128,13 @@ int bird_send_bgp(struct bgp_proto *p, cJSON *input_json)
         .mpls = c->desc->mpls,
     };
 
-    cur_pos = insert_json_key(cur_pos, input_json, "withdraws");
+    cur_pos = insert_json_key_str(cur_pos, input_json, "withdraws");
     byte *attrs_start = cur_pos;
     insert_u8(attrs_start + 2, BAF_OPTIONAL | BAF_EXT_LEN); // flag
     insert_u8(attrs_start + 3, BA_MP_REACH_NLRI);           // code
     put_af3(attrs_start + 6, BGP_AF_IPV4);                  // afi (2 for AFI and 1 for SAFI)
     cur_pos = attrs_start + 9;
-    cur_pos = insert_json_key(cur_pos, input_json, "next_hop");
+    cur_pos = insert_json_key_str(cur_pos, input_json, "next_hop");
     cur_pos = insert_u8(cur_pos, 0); // reserve
 
     int is_interior = cJSON_GetObjectItem(input_json, "is_interior")->valueint;
@@ -116,7 +143,7 @@ int bird_send_bgp(struct bgp_proto *p, cJSON *input_json)
         // TODO add intra path here
     }
     // insert nlri
-    cur_pos = insert_json_key(cur_pos, input_json, "bgp_nlri");
+    cur_pos = insert_json_key_str(cur_pos, input_json, "bgp_nlri");
 
     // end of standard mp reach nlri field
     put_u16(attrs_start + 4, (cur_pos - attrs_start) - 6);
@@ -127,8 +154,8 @@ int bird_send_bgp(struct bgp_proto *p, cJSON *input_json)
     // insert as_path
     if (is_interior == 1)
     {
-        cur_pos += bgp_put_attr_hdr(cur_pos, BA_AS_PATH, 80, cJSON_GetObjectItem(input_json, "as_path_len")->valueint); // here set the length to 0 and overwite it latter
-        cur_pos = insert_json_key(cur_pos, input_json, "as_path");
+        cur_pos += bgp_put_attr_hdr(cur_pos, BA_AS_PATH, 80, cJSON_GetObjectItem(input_json, "as_path_len")->valueint);
+        cur_pos = insert_json_key_str(cur_pos, input_json, "as_path");
     }
     // end of SAV attribute
     // insert attr length
@@ -151,21 +178,50 @@ int bird_send_bgp(struct bgp_proto *p, cJSON *input_json)
 
     return 0;
 }
+void log_data(byte *data, int len, char *msg)
+{
+    int count = 0;
+    log("===========================");
+    while (count < len)
+    {
+        log("%s [%d]: %d", msg, count, get_u8(data));
+        data += 1;
+        count += 1;
+    }
+}
 int bird_send_dsav(struct bgp_proto *p, cJSON *input_json)
 {
     log("bird_send_dsav");
     struct bgp_conn *conn = p->conn;
     byte *cur_pos, *end, *buf_start, *buf_end;
-    uint type;
     sock *sk = conn->sk;
     buf_start = sk->tbuf;
     buf_end = buf_start + (bgp_max_packet_length(conn) - BGP_HEADER_LENGTH);
     log("bgp max len: %d", (bgp_max_packet_length(conn) - BGP_HEADER_LENGTH));
     cur_pos = buf_start + BGP_HEADER_LENGTH;
-    type = conn->packets_to_send;
     struct lp_state tmpp;
+    log("before channel");
     lp_save(tmp_linpool, &tmpp); // save local linpool state
-    struct bgp_channel *c = proto_find_channel_by_name(p, "rpdp4");
+    // struct bgp_channel *c = proto_find_channel_by_name(p, "rpdp4");
+    struct bgp_channel *c = proto_find_channel_by_name(p, cJSON_GetObjectItem(input_json, "channel")->string);
+    log("after channel");
+    log("216");
+    log("input_json: %s", cJSON_Print(input_json));
+    char *msg_type = cJSON_GetObjectItem(input_json, "type")->valuestring;
+    if (strcmp(msg_type, "spa") == 0)
+        return send_rpdp_update(
+            p, input_json, conn, cur_pos, end, buf_start, sk, tmpp, c);
+    else if (strcmp(msg_type, "spd") == 0)
+        return send_rpdp_refresh(
+            p, input_json, conn, cur_pos, end, buf_start, sk, tmpp, c);
+    else
+        log("ERROR: type not supported %s", msg_type);
+}
+
+int send_rpdp_update(struct bgp_proto *p, cJSON *input_json, struct bgp_conn *conn,
+                     byte *cur_pos, byte *end, byte *buf_start, sock *sk,
+                     lp_state tmpp, struct bgp_channel *c)
+{
     struct bgp_write_state s = {
         .proto = p,
         .channel = c,
@@ -175,44 +231,63 @@ int bird_send_dsav(struct bgp_proto *p, cJSON *input_json)
         .add_path = c->add_path_tx,
         .mpls = c->desc->mpls,
     };
-    cur_pos = insert_json_key(cur_pos, input_json, "withdraws");
+    /*
+    send an update packet
+    */
+    // log ("after write state");
+    cur_pos = insert_u16(cur_pos, 0); // in spa, we keep withdraws empty
+    // log("after withdraws");
+    byte *total_path_attr_len_pos = cur_pos;
+    cur_pos += 2;
     byte *attrs_start = cur_pos;
-    insert_u8(attrs_start + 2, BAF_OPTIONAL | BAF_EXT_LEN); // flag
-    // start of  SAV attribute
-    insert_u8(attrs_start + 3, BA_MP_REACH_NLRI); // code
-    put_af3(attrs_start + 6, BGP_AF_RPDP4);       // afi (2 for AFI and 1 for SAFI)
-    cur_pos = attrs_start + 9;
-    // insert next_hop
-    cur_pos = insert_json_key(cur_pos, input_json, "next_hop");
-    cur_pos = insert_u8(cur_pos, 0); // reserve
-    // begin of standard mp reach nlri field
-    // //insert sav_origin
-    cur_pos = insert_json_key(cur_pos, input_json, "sav_origin");
-    // insert sav_scope
-    cur_pos = insert_json_key(cur_pos, input_json, "sav_scope");
-    int is_interior = cJSON_GetObjectItem(input_json, "is_interior")->valueint;
-    if (is_interior == 0)
+    // insert rpdp_add
+    int add_len = cJSON_GetObjectItem(input_json, "add_len")->valueint;
+    if (add_len > 0)
     {
-        // TODO add intra path here
+        add_len += 5; // related to length of next hop and reserve
+        // log("add_len: %d", add_len);
+        cur_pos += bgp_put_attr_hdr(cur_pos, BA_MP_REACH_NLRI, 128, add_len);
+        int rpdp_version = cJSON_GetObjectItem(input_json, "rpdp_version")->valueint;
+        if (rpdp_version == 6)
+            put_af3(cur_pos, BGP_AF_RPDP6);
+        else if (rpdp_version == 4)
+            put_af3(cur_pos, BGP_AF_RPDP4);
+        else
+            log("rpdp version not supported!!!!!!! %d", rpdp_version);
+        cur_pos += 3;
+        cur_pos = insert_u8(cur_pos, 0); // length of next hop,if added next hop, change this and nlri_data_len
+        cur_pos = insert_u8(cur_pos, 0); // reserve
+        cur_pos = insert_json_key_int(cur_pos, input_json, "add");
     }
-    // insert nlri
-    cur_pos = insert_json_key(cur_pos, input_json, "sav_nlri");
-
-    // end of standard mp reach nlri field
-    put_u16(attrs_start + 4, (cur_pos - attrs_start) - 6);
-
+    // insert rpdp_del
+    int del_len = cJSON_GetObjectItem(input_json, "del_len")->valueint;
+    if (del_len > 0)
+    {
+        del_len += 5; // related to length of next hop and reserve
+        // log("del_len: %d", del_len);
+        cur_pos += bgp_put_attr_hdr(cur_pos, BA_MP_UNREACH_NLRI, 128, del_len);
+        int rpdp_version = cJSON_GetObjectItem(input_json, "rpdp_version")->valueint;
+        if (rpdp_version == 6)
+            put_af3(cur_pos, BGP_AF_RPDP6);
+        else if (rpdp_version == 4)
+            put_af3(cur_pos, BGP_AF_RPDP4);
+        else
+            log("rpdp version not supported!!!!!!! %d", rpdp_version);
+        cur_pos += 3;
+        cur_pos = insert_u8(cur_pos, 0); // length of next hop,if added next hop, change this and nlri_data_len
+        cur_pos = insert_u8(cur_pos, 0); // reserve
+        cur_pos = insert_json_key_int(cur_pos, input_json, "del");
+    }
     // insert origin
     cur_pos += bgp_put_attr_hdr(cur_pos, BA_ORIGIN, 64, 1);
     cur_pos = insert_u8(cur_pos, p->is_interior);
     // insert as_path
-    if (is_interior == 1)
-    {
-        cur_pos += bgp_put_attr_hdr(cur_pos, BA_AS_PATH, 80, cJSON_GetObjectItem(input_json, "as_path_len")->valueint); // here set the length to 0 and overwite it latter
-        cur_pos = insert_json_key(cur_pos, input_json, "as_path");
-    }
-    // end of SAV attribute
+    cur_pos += bgp_put_attr_hdr(cur_pos, BA_AS_PATH, 64, cJSON_GetObjectItem(input_json, "as_path_len")->valueint);
+    cur_pos = insert_json_key_int(cur_pos, input_json, "as_path");
+
     // insert attr length
-    put_u16(attrs_start, (cur_pos - attrs_start) - 2);
+    // log("total_path_attr_len_pos: %d", (cur_pos - total_path_attr_len_pos) - 2);
+    put_u16(total_path_attr_len_pos, (cur_pos - total_path_attr_len_pos) - 2);
 
     // bgp tailing
     end = cur_pos;
@@ -223,20 +298,65 @@ int bird_send_dsav(struct bgp_proto *p, cJSON *input_json)
 
     uint len = end - buf_start;
 
-    log("sav packet len %d", len);
+    log("rpdp_update len %d", len);
 
-    conn->bgp->stats.tx_messages++;
-    conn->bgp->stats.tx_bytes += len;
-    memset(buf_start, 0xff, 16); /* Marker */
-    put_u16(buf_start + 16, len);
-    buf_start[18] = PKT_UPDATE;
-
-    int socket_result = sk_send(sk, len);
+    int socket_result = bgp_send(conn, PKT_UPDATE, len);
     input_json = NULL;
+    // log_data(buf_start, len, "DSAV-update packet");
     log("sav-update send result, %d", socket_result);
-    return 0;
+    return socket_result;
 }
+int send_rpdp_refresh(struct bgp_proto *p, cJSON *input_json, struct bgp_conn *conn,
+                      byte *cur_pos, byte *end, byte *buf_start, sock *sk,
+                      lp_state tmpp, struct bgp_channel *c)
+{
+    // insert rpdp
+    int rpdp_version = cJSON_GetObjectItem(input_json, "rpdp_version")->valueint;
+    log("inserting afi");
+    if (rpdp_version == 6)
+        cur_pos = insert_u16(cur_pos, 2);
+    else if (rpdp_version == 4)
+        cur_pos = insert_u16(cur_pos, 1);
+    else
+        log("rpdp version not supported!!!!!!! %d", rpdp_version);
+    log("inserting reserve");
+    cur_pos = insert_u8(cur_pos, 0);
+    log("inserting safi");
+    cur_pos = insert_u8(cur_pos, 251);
+    // type
+    cur_pos = insert_u16(cur_pos, 2);
+    // subtype
+    cur_pos = insert_u8(cur_pos, 1);
+    byte *len_pos = cur_pos;
+    cur_pos += 2;
+    // SN
+    put_u32(cur_pos, cJSON_GetObjectItem(input_json, "SN")->valueint);
+    cur_pos += 4;
+    log("inserting origin_id");
+    cur_pos = insert_json_key_int(cur_pos, input_json, "origin_id");
 
+    // optional_data
+    byte *optional_data_len_pos = cur_pos;
+    cur_pos += 2;
+    log("inserting opt_data");
+    cur_pos = insert_json_key_int(cur_pos, input_json, "opt_data");
+    // address
+    put_u16(optional_data_len_pos, (cur_pos - optional_data_len_pos) - 2);
+    log("inserting addresses");
+    cur_pos = insert_json_key_int(cur_pos, input_json, "addresses");
+    // insert lengths
+
+    put_u16(len_pos, (cur_pos - len_pos) - 2);
+    
+    log("sav-refresh packet assembled");
+    // log("pkt data:")
+    int socket_result = bgp_send(conn, PKT_ROUTE_REFRESH, cur_pos - buf_start);
+    log("sav-refresh send result, %d", socket_result);
+    input_json = NULL;
+    // log_data(buf_start, len, "DSAV-update packet");
+    // log_data(buf_start, cur_pos - buf_start, "DSAV-refresh packet");
+    return socket_result;
+}
 // void  send_request(char info[], char reply[])
 char *send_request(char info[])
 {
@@ -432,6 +552,7 @@ void send_to_agent(char msg[])
 {
     // 1: missing key code
     // 0: good
+    log("send to agent: %s", msg);
     char *server_reply = NULL;
     server_reply = send_request(msg);
     int return_code = 1;
@@ -490,7 +611,8 @@ void send_pkts(char *filename)
         log("file not found");
         exit(EXIT_FAILURE);
     }
-    while ((getline(&line, &len, fp)) != -1) {
+    while ((getline(&line, &len, fp)) != -1)
+    {
         return_code = send_rpdp_pkt(cJSON_Parse(line));
         if (return_code != 0)
             log("send_rpdp_pkt failed");
