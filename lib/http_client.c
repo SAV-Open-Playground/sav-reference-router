@@ -200,12 +200,9 @@ int bird_send_dsav(struct bgp_proto *p, cJSON *input_json)
     log("bgp max len: %d", (bgp_max_packet_length(conn) - BGP_HEADER_LENGTH));
     cur_pos = buf_start + BGP_HEADER_LENGTH;
     struct lp_state tmpp;
-    log("before channel");
     lp_save(tmp_linpool, &tmpp); // save local linpool state
     // struct bgp_channel *c = proto_find_channel_by_name(p, "rpdp4");
     struct bgp_channel *c = proto_find_channel_by_name(p, cJSON_GetObjectItem(input_json, "channel")->string);
-    log("after channel");
-    log("216");
     log("input_json: %s", cJSON_Print(input_json));
     char *msg_type = cJSON_GetObjectItem(input_json, "type")->valuestring;
     if (strcmp(msg_type, "spa") == 0)
@@ -347,7 +344,7 @@ int send_rpdp_refresh(struct bgp_proto *p, cJSON *input_json, struct bgp_conn *c
     // insert lengths
 
     put_u16(len_pos, (cur_pos - len_pos) - 2);
-    
+
     log("sav-refresh packet assembled");
     // log("pkt data:")
     int socket_result = bgp_send(conn, PKT_ROUTE_REFRESH, cur_pos - buf_start);

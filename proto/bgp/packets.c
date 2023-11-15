@@ -3024,9 +3024,20 @@ bgp_create_end_refresh(struct bgp_channel *c, byte *buf)
     return buf + 4;
 }
 
+static void insert_int_array(cJSON *json, byte *cur_pos, int len, char *name)
+{
+    cJSON *array = cJSON_CreateArray();
+    for (int i = 0; i < len; i++)
+        cJSON_AddItemToArray(array, cJSON_CreateNumber(get_u8(cur_pos + i)));
+    cur_pos += len;
+    // log("insert_%s_array: %s", name, cJSON_Print(array));
+    cJSON_AddItemToObject(json, name, array);
+    // log("json: %s", cJSON_Print(json));
+}
+
 static process_spd(struct bgp_proto *p, byte *pkt, uint len)
 {
-    // log_data(pkt, len, "packet");
+    // log_data(pkt, len, "spd_packet");
     cJSON *ret = cJSON_CreateObject();
     cJSON_AddStringToObject(ret, "protocol_name", p->p.name);
 
@@ -3080,21 +3091,15 @@ static process_spd(struct bgp_proto *p, byte *pkt, uint len)
     ADVANCE(cur_pos, len, 4);
     int opt_len = get_u16(cur_pos);
     ADVANCE(cur_pos, len, 2);
-    cJSON *opt_data = cJSON_CreateArray();
-    for (int i = 0; i < opt_len; i++)
-    {
-        cJSON_AddItemToArray(opt_data, cJSON_CreateNumber(get_u8(cur_pos)));
-        ADVANCE(cur_pos, len, 1);
-    }
-    cJSON_AddArrayToObject(opt_data, "opt_data");
-    cJSON_AddArrayToObject(cJSON_CreateIntArray(cur_pos, len), "addresses");
-    ADVANCE(cur_pos, len, len);
+    insert_int_array(ret, cur_pos, opt_len, "opt_data");
+    len -= opt_len;
+    insert_int_array(ret, cur_pos, len, "addresses");
     cJSON *json_to_send = cJSON_CreateObject();
     cJSON_AddStringToObject(json_to_send, "msg_type", "rpdp_route_refresh");
     cJSON_AddItemToObject(json_to_send, "msg", ret);
     log("json_to_send: %s", cJSON_Print(json_to_send));
     send_to_agent(cJSON_Print(json_to_send));
-    log_data(cur_pos, len, "spd_remaining");
+
     cJSON_Delete(json_to_send);
 }
 static void
