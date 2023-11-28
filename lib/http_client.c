@@ -254,27 +254,28 @@ int send_rpdp_update(struct bgp_proto *p, cJSON *input_json, struct bgp_conn *co
         cur_pos += 3;
         cur_pos = insert_u8(cur_pos, 0); // length of next hop,if added next hop, change this and nlri_data_len
         cur_pos = insert_u8(cur_pos, 0); // reserve
+        log("add: %s", cJSON_Print(cJSON_GetObjectItem(input_json, "add")));
         cur_pos = insert_json_key_int(cur_pos, input_json, "add");
     }
     // insert rpdp_del
     int del_len = cJSON_GetObjectItem(input_json, "del_len")->valueint;
-    if (del_len > 0)
-    {
-        del_len += 5; // related to length of next hop and reserve
-        // log("del_len: %d", del_len);
-        cur_pos += bgp_put_attr_hdr(cur_pos, BA_MP_UNREACH_NLRI, 128, del_len);
-        int rpdp_version = cJSON_GetObjectItem(input_json, "rpdp_version")->valueint;
-        if (rpdp_version == 6)
-            put_af3(cur_pos, BGP_AF_RPDP6);
-        else if (rpdp_version == 4)
-            put_af3(cur_pos, BGP_AF_RPDP4);
-        else
-            log("rpdp version not supported!!!!!!! %d", rpdp_version);
-        cur_pos += 3;
-        cur_pos = insert_u8(cur_pos, 0); // length of next hop,if added next hop, change this and nlri_data_len
-        cur_pos = insert_u8(cur_pos, 0); // reserve
-        cur_pos = insert_json_key_int(cur_pos, input_json, "del");
-    }
+    // if (del_len > 0)
+    // {
+    //     del_len += 5; // related to length of next hop and reserve
+    //     // log("del_len: %d", del_len);
+    //     cur_pos += bgp_put_attr_hdr(cur_pos, BA_MP_UNREACH_NLRI, 128, del_len);
+    //     int rpdp_version = cJSON_GetObjectItem(input_json, "rpdp_version")->valueint;
+    //     if (rpdp_version == 6)
+    //         put_af3(cur_pos, BGP_AF_RPDP6);
+    //     else if (rpdp_version == 4)
+    //         put_af3(cur_pos, BGP_AF_RPDP4);
+    //     else
+    //         log("rpdp version not supported!!!!!!! %d", rpdp_version);
+    //     cur_pos += 3;
+    //     cur_pos = insert_u8(cur_pos, 0); // length of next hop,if added next hop, change this and nlri_data_len
+    //     cur_pos = insert_u8(cur_pos, 0); // reserve
+    //     cur_pos = insert_json_key_int(cur_pos, input_json, "del");
+    // }
     // insert origin
     cur_pos += bgp_put_attr_hdr(cur_pos, BA_ORIGIN, 64, 1);
     cur_pos = insert_u8(cur_pos, p->is_interior);

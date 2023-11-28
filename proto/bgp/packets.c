@@ -2136,13 +2136,27 @@ bgp_decode_rpdp4_asn(char target[], byte *pos, int is_as4)
         pos += 2;
     }
 }
+static void log_data(byte *pos, uint len, char *name)
+{
+    byte *this_pos = pos;
+    int count = 0;
+    while (count < len)
+    {
+        log("%s [%d]: %d", name, count, get_u8(this_pos));
+        this_pos += 1;
+        count += 1;
+    }
+    return;
+}
+
 static void
 bgp_decode_nlri_rpdp4(struct bgp_parse_state *s, byte *pos, uint len, rta *a)
 /* Although named as nlri decode, we decode other staff here.*/
 // UPDATE-SPA
 {
+    log("2156");
     byte *end_pos = pos + len;
-    log("bgp_decode_nlri_rpdp4 len: %d", len);
+    log_data(pos, len, "bgp_decode_nlri_rpdp4");
     // decode sav_origin
     if (s->as4_session)
     {
@@ -2210,24 +2224,15 @@ bgp_decode_nlri_rpdp4(struct bgp_parse_state *s, byte *pos, uint len, rta *a)
     }
     result_str[strlen(result_str) - 1] = '\0';
     strcat(s->spa_add, result_str);
+    s->is_rpdp = 1;
     // log("s->sav_nlri: [%s]", s->sav_nlri);
     return;
 }
-static void log_data(byte *pos, uint len, char *name)
-{
-    byte *this_pos = pos;
-    int count = 0;
-    while (count < len)
-    {
-        log("%s [%d]: %d", name, count, get_u8(this_pos));
-        this_pos += 1;
-        count += 1;
-    }
-    return;
-}
+
 static void
 bgp_decode_nlri_rpdp6(struct bgp_parse_state *s, byte *pos, uint len, rta *a)
 {
+    // log_data(pos, len, "bgp_decode_nlri_rpdp6");
     while (len)
     {
         bsprintf(s->temp_u8, "");
@@ -2236,6 +2241,7 @@ bgp_decode_nlri_rpdp6(struct bgp_parse_state *s, byte *pos, uint len, rta *a)
         ADVANCE(pos, len, 1);
     }
     s->spa_add[strlen(s->spa_add) - 1] = '\0';
+    s->is_rpdp = 1;
 }
 
 // end of rpdp nlri processing block
@@ -2370,6 +2376,7 @@ static const struct bgp_af_desc bgp_af_table[] = {
         .afi = BGP_AF_RPDP4,
         .net = NET_IP4,
         .name = "rpdp4",
+        // .encode_nlri = bgp_encode_nlri_rpdp,
         .encode_nlri = bgp_encode_nlri_ip4, // encoding is done in http_client.c
         .decode_nlri = bgp_decode_nlri_rpdp4,
         .encode_next_hop = bgp_encode_next_hop_ip,
@@ -2380,6 +2387,7 @@ static const struct bgp_af_desc bgp_af_table[] = {
         .afi = BGP_AF_RPDP6,
         .net = NET_IP6,
         .name = "rpdp6",
+        // .encode_nlri = bgp_encode_nlri_rpdp,
         .encode_nlri = bgp_encode_nlri_ip6,
         .decode_nlri = bgp_decode_nlri_rpdp6,
         .encode_next_hop = bgp_encode_next_hop_ip,
@@ -2621,6 +2629,7 @@ again:;
     return NULL;
 
 done:
+    log("channel :%s", c->c.name);
     BGP_TRACE_RL(&rl_snd_update, D_PACKETS, "Sending UPDATE");
     p->stats.tx_updates++;
     lp_restore(tmp_linpool, &tmpp);
@@ -2690,7 +2699,7 @@ bgp_decode_nlri(struct bgp_parse_state *s, u32 afi, byte *nlri, uint len, ea_lis
     struct bgp_channel *c = bgp_get_channel(s->proto, afi);
 
     rta *a = NULL;
-    // log(L_TRACE "%s.%s: bgp_decode_nlri: afi=%d, safi=%d",s->proto->cf->c.name, c->cf->c.name,BGP_AFI(afi), BGP_SAFI(afi));
+    log(L_TRACE "%s.%s: bgp_decode_nlri: afi=%d, safi=%d", s->proto->cf->c.name, c->cf->c.name, BGP_AFI(afi), BGP_SAFI(afi));
     if (!c)
         DISCARD(BAD_AFI, BGP_AFI(afi), BGP_SAFI(afi));
 
@@ -2757,22 +2766,22 @@ bgp_rx_update(struct bgp_conn *conn, byte *pkt, uint len)
     lp_save(tmp_linpool, &tmpp);
 
     /* Initialize parse state */
-    struct bgp_parse_state s = {
-        .proto = p,
-        .pool = tmp_linpool,
-        .as4_session = p->as4_session,
-        .incoming_interface = conn->sk->lifindex, /* insert the incoming interface info to state*/
-        .send_to_sav_app_bird = 0,
-        .as_path = "",
-        .sav_origin = "",
-        .routes = "",
-        .sav_scope = "",
-        .spa_add = "",
-        .spa_del = "",
-        .spd_add = "",
-        .spd_del = "",
-        // .incoming_interface = conn->sk->iface,
-    };
+    struct bgp_parse_state s =
+        {
+            .proto = p,
+            .pool = tmp_linpool,
+            .as4_session = p->as4_session,
+            .incoming_interface = conn->sk->lifindex, /* insert the incoming interface info to state*/
+            .send_to_sav_app_bird = 0,
+            .as_path = "",
+            .sav_origin = "",
+            .routes = "",
+            .sav_scope = "",
+            .spa_add = "",
+            .spa_del = "",
+            .is_rpdp = 0
+            // .incoming_interface = conn->sk->iface,
+        };
     /* Parse error handler */
     if (setjmp(s.err_jmpbuf))
     {
@@ -2837,7 +2846,7 @@ bgp_rx_update(struct bgp_conn *conn, byte *pkt, uint len)
     /*Below is where processing the "actual" unreach/withdraw info*/
     if (s.ip_unreach_len)
         bgp_decode_nlri(&s, BGP_AF_IPV4, s.ip_unreach_nlri, s.ip_unreach_len, NULL, NULL, 0);
-
+    // log("s.mp_unreach_af: %d", s.mp_unreach_af);
     if (s.mp_unreach_len)
         bgp_decode_nlri(&s, s.mp_unreach_af, s.mp_unreach_nlri, s.mp_unreach_len, NULL, NULL, 0);
     s.reach_nlri_step = 1;
@@ -2845,6 +2854,8 @@ bgp_rx_update(struct bgp_conn *conn, byte *pkt, uint len)
     if (s.ip_reach_len)
         bgp_decode_nlri(&s, BGP_AF_IPV4, s.ip_reach_nlri, s.ip_reach_len,
                         ea, s.ip_next_hop_data, s.ip_next_hop_len);
+
+    // log("s.mp_reach_af: %d", s.mp_reach_af);
     if (s.mp_reach_len)
         bgp_decode_nlri(&s, s.mp_reach_af, s.mp_reach_nlri, s.mp_reach_len,
                         ea, s.mp_next_hop_data, s.mp_next_hop_len);
@@ -2858,10 +2869,7 @@ done:
         log("sending to agent");
         s.routes[strlen(s.routes) - 1] = '\0'; // removing ending comma
         char temp[2048] = "";
-        if (strlen(s.spa_add) == 0 &&
-            strlen(s.spa_del) == 0 &&
-            strlen(s.spd_add) == 0 &&
-            strlen(s.spd_del) == 0)
+        if (s.is_rpdp == 0)
             bsprintf(temp, "{\"msg_type\":\"bgp_update\"\n,\"msg\":{\n\
            \"protocol_name\":\"%s\"\n\
            ,\"channels\":\"",
@@ -3267,50 +3275,55 @@ bgp_fire_tx(struct bgp_conn *conn)
         while (conn->channels_to_send)
         {
             c = bgp_get_channel_to_send(p, conn);
-            s = c->packets_to_send;
-
-            if (s & (1 << PKT_ROUTE_REFRESH))
-            {
-                c->packets_to_send &= ~(1 << PKT_ROUTE_REFRESH);
-                end = bgp_create_route_refresh(c, pkt);
-                return bgp_send(conn, PKT_ROUTE_REFRESH, end - buf);
-            }
-            else if (s & (1 << PKT_BEGIN_REFRESH))
-            {
-                /* BoRR is a subtype of RR, but uses separate bit in packets_to_send */
-                c->packets_to_send &= ~(1 << PKT_BEGIN_REFRESH);
-                end = bgp_create_begin_refresh(c, pkt);
-                return bgp_send(conn, PKT_ROUTE_REFRESH, end - buf);
-            }
-            else if (s & (1 << PKT_UPDATE))
-            {
-                end = bgp_create_update(c, pkt);
-                if (end)
-                    return bgp_send(conn, PKT_UPDATE, end - buf);
-
-                /* No update to send, perhaps we need to send End-of-RIB or EoRR */
-                c->packets_to_send = 0;
+            if (strcmp(c->c.name, "rpdp6") == 0)
                 conn->channels_to_send &= ~(1 << c->index);
+            else
+            {
+                s = c->packets_to_send;
 
-                if (c->feed_state == BFS_LOADED)
+                if (s & (1 << PKT_ROUTE_REFRESH))
                 {
-                    c->feed_state = BFS_NONE;
-                    end = bgp_create_end_mark(c, pkt);
-                    return bgp_send(conn, PKT_UPDATE, end - buf);
-                }
-
-                else if (c->feed_state == BFS_REFRESHED)
-                {
-                    c->feed_state = BFS_NONE;
-                    end = bgp_create_end_refresh(c, pkt);
+                    c->packets_to_send &= ~(1 << PKT_ROUTE_REFRESH);
+                    end = bgp_create_route_refresh(c, pkt);
                     return bgp_send(conn, PKT_ROUTE_REFRESH, end - buf);
                 }
-            }
-            else if (s)
-                bug("Channel packets_to_send: %x", s);
+                else if (s & (1 << PKT_BEGIN_REFRESH))
+                {
+                    /* BoRR is a subtype of RR, but uses separate bit in packets_to_send */
+                    c->packets_to_send &= ~(1 << PKT_BEGIN_REFRESH);
+                    end = bgp_create_begin_refresh(c, pkt);
+                    return bgp_send(conn, PKT_ROUTE_REFRESH, end - buf);
+                }
+                else if (s & (1 << PKT_UPDATE))
+                {
+                    end = bgp_create_update(c, pkt);
+                    if (end)
+                        return bgp_send(conn, PKT_UPDATE, end - buf);
 
-            c->packets_to_send = 0;
-            conn->channels_to_send &= ~(1 << c->index);
+                    /* No update to send, perhaps we need to send End-of-RIB or EoRR */
+                    c->packets_to_send = 0;
+                    conn->channels_to_send &= ~(1 << c->index);
+
+                    if (c->feed_state == BFS_LOADED)
+                    {
+                        c->feed_state = BFS_NONE;
+                        end = bgp_create_end_mark(c, pkt);
+                        return bgp_send(conn, PKT_UPDATE, end - buf);
+                    }
+
+                    else if (c->feed_state == BFS_REFRESHED)
+                    {
+                        c->feed_state = BFS_NONE;
+                        end = bgp_create_end_refresh(c, pkt);
+                        return bgp_send(conn, PKT_ROUTE_REFRESH, end - buf);
+                    }
+                }
+                else if (s)
+                    bug("Channel packets_to_send: %x", s);
+
+                c->packets_to_send = 0;
+                conn->channels_to_send &= ~(1 << c->index);
+            }
         }
 
     return 0;

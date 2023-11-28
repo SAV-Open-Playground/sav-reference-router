@@ -496,6 +496,7 @@ struct bgp_parse_state {
   int  send_to_sav_app_bird; // 1: send to sav_agent,otherwise not
   char routes[1024]; // list of modified routes
   char temp_u8[4];
+  int is_rpdp;
 };
 
 #define BGP_PORT		179
