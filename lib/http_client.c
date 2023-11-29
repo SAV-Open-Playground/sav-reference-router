@@ -95,7 +95,7 @@ int bird_send(struct bgp_proto *p, cJSON *input_json)
     struct bgp_conn *conn = p->conn;
     if (conn == NULL)
     {
-        log("no conn"); // connection not ready
+        log("error: no conn"); // connection not ready
         return 2;
     }
     int is_native_bgp = cJSON_GetObjectItem(input_json, "is_native_bgp")->valueint;
@@ -373,7 +373,9 @@ char *send_request(char info[])
     int body_len;
     int request_len;
     char *req_str = NULL;
+    // log("send_request: [%s]", info);
     cJSON *info_json = cJSON_Parse(info);
+    log("send_request: [%s]", cJSON_Print(info_json));
     int reply_size = 1024;
     char *reply = (char *)calloc(reply_size, sizeof(char));
     // char *token = NULL;
@@ -550,7 +552,6 @@ void send_to_agent(char msg[])
 {
     // 1: missing key code
     // 0: good
-    log("send to agent: %s", msg);
     char *server_reply = NULL;
     server_reply = send_request(msg);
     int return_code = 1;

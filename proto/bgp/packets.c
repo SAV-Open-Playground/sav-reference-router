@@ -2154,7 +2154,6 @@ bgp_decode_nlri_rpdp4(struct bgp_parse_state *s, byte *pos, uint len, rta *a)
 /* Although named as nlri decode, we decode other staff here.*/
 // UPDATE-SPA
 {
-    log("2156");
     byte *end_pos = pos + len;
     log_data(pos, len, "bgp_decode_nlri_rpdp4");
     // decode sav_origin
@@ -2378,7 +2377,7 @@ static const struct bgp_af_desc bgp_af_table[] = {
         .name = "rpdp4",
         // .encode_nlri = bgp_encode_nlri_rpdp,
         .encode_nlri = bgp_encode_nlri_ip4, // encoding is done in http_client.c
-        .decode_nlri = bgp_decode_nlri_rpdp4,
+        .decode_nlri = bgp_decode_nlri_rpdp6,
         .encode_next_hop = bgp_encode_next_hop_ip,
         .decode_next_hop = bgp_decode_next_hop_ip,
         .update_next_hop = bgp_update_next_hop_ip,
@@ -3275,7 +3274,7 @@ bgp_fire_tx(struct bgp_conn *conn)
         while (conn->channels_to_send)
         {
             c = bgp_get_channel_to_send(p, conn);
-            if (strcmp(c->c.name, "rpdp6") == 0)
+            if (strcmp(c->c.name, "rpdp6") == 0 || strcmp(c->c.name, "rpdp4") == 0)
                 conn->channels_to_send &= ~(1 << c->index);
             else
             {
