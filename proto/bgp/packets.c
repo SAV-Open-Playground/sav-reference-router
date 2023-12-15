@@ -2608,7 +2608,6 @@ again:;
             lp_restore(tmp_linpool, &tmpp);
             goto again;
         }
-
         res = s.mp_reach ? bgp_create_mp_reach(&s, buck, buf, end) : bgp_create_ip_reach(&s, buck, buf, end);
         if (EMPTY_LIST(buck->prefixes))
             bgp_free_bucket(c, buck);
@@ -2630,6 +2629,7 @@ again:;
 done:
     log("channel :%s", c->c.name);
     BGP_TRACE_RL(&rl_snd_update, D_PACKETS, "Sending UPDATE");
+    // log_data(buf, res - buf, "bgp_create_update");
     p->stats.tx_updates++;
     lp_restore(tmp_linpool, &tmpp);
 
@@ -3063,6 +3063,7 @@ static process_spd(struct bgp_proto *p, byte *pkt, uint len)
     }
     channels_str[strlen(channels_str) - 1] = '\0';
     cJSON_AddStringToObject(ret, "channels", channels_str);
+    // log("%s",cJSON_Print(ret));
     byte *cur_pos = pkt;
     ADVANCE(cur_pos, len, 19);
     int afi = get_u16(cur_pos);
@@ -3077,6 +3078,7 @@ static process_spd(struct bgp_proto *p, byte *pkt, uint len)
     int subtype = get_u8(cur_pos);
     ADVANCE(cur_pos, len, 1);
     cJSON_AddNumberToObject(ret, "route_refresh_subtype", subtype);
+
     int safi = get_u8(cur_pos);
     ADVANCE(cur_pos, len, 1);
     if (safi != BGP_SAFI_RPDP)
@@ -3089,25 +3091,43 @@ static process_spd(struct bgp_proto *p, byte *pkt, uint len)
     cJSON_AddNumberToObject(ret, "type", get_u16(cur_pos));
     ADVANCE(cur_pos, len, 2);
     cJSON_AddNumberToObject(ret, "sub_type", get_u8(cur_pos));
+    int is_interior = 0;
+    if (get_u8(cur_pos) == 2)
+    {
+        is_interior = 1;
+    }
     ADVANCE(cur_pos, len, 1);
     int spd_len = get_u16(cur_pos);
     ADVANCE(cur_pos, len, 2);
     cJSON_AddNumberToObject(ret, "SN", get_u32(cur_pos));
     ADVANCE(cur_pos, len, 4);
-    cJSON_AddNumberToObject(ret, "origin_id", get_u32(cur_pos));
+    cJSON_AddNumberToObject(ret, "origin_router_id", get_u32(cur_pos));
     ADVANCE(cur_pos, len, 4);
+    if (is_interior == 1)
+    {
+        cJSON_AddNumberToObject(ret, "source_asn", get_u32(cur_pos));
+        ADVANCE(cur_pos, len, 4);
+        cJSON_AddNumberToObject(ret, "validation_asn", get_u32(cur_pos));
+        ADVANCE(cur_pos, len, 4);
+    }
     int opt_len = get_u16(cur_pos);
     ADVANCE(cur_pos, len, 2);
     insert_int_array(ret, cur_pos, opt_len, "opt_data");
     len -= opt_len;
-    insert_int_array(ret, cur_pos, len, "addresses");
+    if (is_interior == 1)
+    {
+        insert_int_array(ret, cur_pos, len, "peer_neighor_asns");
+    }
+    else
+        insert_int_array(ret, cur_pos, len, "addresses");
+
     cJSON *json_to_send = cJSON_CreateObject();
     cJSON_AddStringToObject(json_to_send, "msg_type", "rpdp_route_refresh");
     cJSON_AddItemToObject(json_to_send, "msg", ret);
-    log("json_to_send: %s", cJSON_Print(json_to_send));
+    log("process spd json_to_send: %s", cJSON_Print(json_to_send));
     send_to_agent(cJSON_Print(json_to_send));
-
     cJSON_Delete(json_to_send);
+    // log("process spd json sent", cJSON_Print(json_to_send);
 }
 static void
 bgp_rx_route_refresh(struct bgp_conn *conn, byte *pkt, uint len)
@@ -3134,7 +3154,7 @@ bgp_rx_route_refresh(struct bgp_conn *conn, byte *pkt, uint len)
 
     if (len > (BGP_HEADER_LENGTH + 4))
     {
-        log("entering processing spd");
+        // log("entering processing spd");
         return process_spd(p, pkt, len);
         // log_data(pkt,len,"bgp_rx_route_refresh");
         // log("len: %u", len);

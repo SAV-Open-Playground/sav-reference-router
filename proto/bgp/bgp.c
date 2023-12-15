@@ -1804,7 +1804,7 @@ bgp_init(struct proto_config *CF)
 
   p->cf = cf;
   p->is_internal = (cf->local_as == cf->remote_as);
-  p->is_interior = !p->is_internal || cf->confederation_member;
+  p->is_interior = p->is_internal || cf->confederation_member;
   p->rs_client = cf->rs_client;
   p->rr_client = cf->rr_client;
 

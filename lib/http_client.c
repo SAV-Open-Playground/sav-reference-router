@@ -150,6 +150,7 @@ int bird_send_bgp(struct bgp_proto *p, cJSON *input_json)
 
     // insert origin
     cur_pos += bgp_put_attr_hdr(cur_pos, BA_ORIGIN, 64, 1);
+    cur_pos = insert_json_key_str(cur_pos, input_json, "origin");
     cur_pos = insert_u8(cur_pos, p->is_interior);
     // insert as_path
     if (is_interior == 1)
@@ -203,7 +204,7 @@ int bird_send_dsav(struct bgp_proto *p, cJSON *input_json)
     lp_save(tmp_linpool, &tmpp); // save local linpool state
     // struct bgp_channel *c = proto_find_channel_by_name(p, "rpdp4");
     struct bgp_channel *c = proto_find_channel_by_name(p, cJSON_GetObjectItem(input_json, "channel")->string);
-    log("input_json: %s", cJSON_Print(input_json));
+    // log("input_json: %s", cJSON_Print(input_json));
     char *msg_type = cJSON_GetObjectItem(input_json, "type")->valuestring;
     if (strcmp(msg_type, "spa") == 0)
         return send_rpdp_update(
@@ -219,6 +220,7 @@ int send_rpdp_update(struct bgp_proto *p, cJSON *input_json, struct bgp_conn *co
                      byte *cur_pos, byte *end, byte *buf_start, sock *sk,
                      lp_state tmpp, struct bgp_channel *c)
 {
+    log("send_rpdp_update");
     struct bgp_write_state s = {
         .proto = p,
         .channel = c,
@@ -254,35 +256,47 @@ int send_rpdp_update(struct bgp_proto *p, cJSON *input_json, struct bgp_conn *co
         cur_pos += 3;
         cur_pos = insert_u8(cur_pos, 0); // length of next hop,if added next hop, change this and nlri_data_len
         cur_pos = insert_u8(cur_pos, 0); // reserve
-        log("add: %s", cJSON_Print(cJSON_GetObjectItem(input_json, "add")));
+        // log("add: %s", cJSON_Print(cJSON_GetObjectItem(input_json, "add")));
         cur_pos = insert_json_key_int(cur_pos, input_json, "add");
     }
+    // log("after add");
     // insert rpdp_del
     int del_len = cJSON_GetObjectItem(input_json, "del_len")->valueint;
-    // if (del_len > 0)
-    // {
-    //     del_len += 5; // related to length of next hop and reserve
-    //     // log("del_len: %d", del_len);
-    //     cur_pos += bgp_put_attr_hdr(cur_pos, BA_MP_UNREACH_NLRI, 128, del_len);
-    //     int rpdp_version = cJSON_GetObjectItem(input_json, "rpdp_version")->valueint;
-    //     if (rpdp_version == 6)
-    //         put_af3(cur_pos, BGP_AF_RPDP6);
-    //     else if (rpdp_version == 4)
-    //         put_af3(cur_pos, BGP_AF_RPDP4);
-    //     else
-    //         log("rpdp version not supported!!!!!!! %d", rpdp_version);
-    //     cur_pos += 3;
-    //     cur_pos = insert_u8(cur_pos, 0); // length of next hop,if added next hop, change this and nlri_data_len
-    //     cur_pos = insert_u8(cur_pos, 0); // reserve
-    //     cur_pos = insert_json_key_int(cur_pos, input_json, "del");
-    // }
+    if (del_len > 0)
+    {
+        // TODO
+        // del_len += 5; // related to length of next hop and reserve
+        // // log("del_len: %d", del_len);
+        // cur_pos += bgp_put_attr_hdr(cur_pos, BA_MP_UNREACH_NLRI, 128, del_len);
+        // int rpdp_version = cJSON_GetObjectItem(input_json, "rpdp_version")->valueint;
+        // if (rpdp_version == 6)
+        //     put_af3(cur_pos, BGP_AF_RPDP6);
+        // else if (rpdp_version == 4)
+        //     put_af3(cur_pos, BGP_AF_RPDP4);
+        // else
+        //     log("rpdp version not supported!!!!!!! %d", rpdp_version);
+        // cur_pos += 3;
+        // cur_pos = insert_u8(cur_pos, 0); // length of next hop,if added next hop, change this and nlri_data_len
+        // cur_pos = insert_u8(cur_pos, 0); // reserve
+        // log("del: %s", cJSON_Print(cJSON_GetObjectItem(input_json, "del")));
+        // cur_pos = insert_json_key_int(cur_pos, input_json, "del");
+    }
     // insert origin
     cur_pos += bgp_put_attr_hdr(cur_pos, BA_ORIGIN, 64, 1);
     cur_pos = insert_u8(cur_pos, p->is_interior);
+    cur_pos = insert_json_key_int(cur_pos, input_json, "origin");
+    // log("after origin");
     // insert as_path
-    cur_pos += bgp_put_attr_hdr(cur_pos, BA_AS_PATH, 64, cJSON_GetObjectItem(input_json, "as_path_len")->valueint);
-    cur_pos = insert_json_key_int(cur_pos, input_json, "as_path");
-
+    if (cJSON_GetObjectItem(input_json, "is_interior")->valueint==1)
+    {
+        byte *as_path_start = cur_pos;
+        cur_pos += bgp_put_attr_hdr(cur_pos, BA_AS_PATH, 64, cJSON_GetObjectItem(input_json, "as_path_len")->valueint);
+        cur_pos = insert_json_key_int(cur_pos, input_json, "as_path");
+        byte *as_path_end = cur_pos;
+        log("as_path_len: %d", (as_path_end - as_path_start));
+        log_data(as_path_start, (as_path_end - as_path_start), "as_path");
+    }
+    
     // insert attr length
     // log("total_path_attr_len_pos: %d", (cur_pos - total_path_attr_len_pos) - 2);
     put_u16(total_path_attr_len_pos, (cur_pos - total_path_attr_len_pos) - 2);
@@ -296,7 +310,7 @@ int send_rpdp_update(struct bgp_proto *p, cJSON *input_json, struct bgp_conn *co
 
     uint len = end - buf_start;
 
-    log("rpdp_update len %d", len);
+    // log("rpdp_update len %d", len);
 
     int socket_result = bgp_send(conn, PKT_UPDATE, len);
     input_json = NULL;
@@ -309,39 +323,69 @@ int send_rpdp_refresh(struct bgp_proto *p, cJSON *input_json, struct bgp_conn *c
                       lp_state tmpp, struct bgp_channel *c)
 {
     // insert rpdp
+    log("send_rpdp_refresh");
+    log("input_json: %s", cJSON_Print(input_json));
     int rpdp_version = cJSON_GetObjectItem(input_json, "rpdp_version")->valueint;
-    log("inserting afi");
+    // log("inserting afi");
     if (rpdp_version == 6)
         cur_pos = insert_u16(cur_pos, 2);
     else if (rpdp_version == 4)
         cur_pos = insert_u16(cur_pos, 1);
     else
         log("rpdp version not supported!!!!!!! %d", rpdp_version);
-    log("inserting reserve");
+    // log("inserting reserve");
     cur_pos = insert_u8(cur_pos, 0);
-    log("inserting safi");
+    // log("inserting safi");
     cur_pos = insert_u8(cur_pos, 251);
-    // type
+    // type (spd message indicator)
     cur_pos = insert_u16(cur_pos, 2);
     // subtype
-    cur_pos = insert_u8(cur_pos, 1);
+    if (cJSON_GetObjectItem(input_json, "is_interior")->valueint == 1)
+        cur_pos = insert_u8(cur_pos, 2);
+    else
+        cur_pos = insert_u8(cur_pos, 1);
+
     byte *len_pos = cur_pos;
     cur_pos += 2;
     // SN
     put_u32(cur_pos, cJSON_GetObjectItem(input_json, "SN")->valueint);
     cur_pos += 4;
-    log("inserting origin_id");
-    cur_pos = insert_json_key_int(cur_pos, input_json, "origin_id");
-
+    // log("inserting origin_router_id");
+    cur_pos = insert_json_key_int(cur_pos, input_json, "origin_router_id");
+    if (cJSON_GetObjectItem(input_json, "is_interior")->valueint == 1)
+    {
+        // log("inserting origin_as");
+        put_u32(cur_pos, cJSON_GetObjectItem(input_json, "source_asn")->valueint);
+        cur_pos += 4;
+        // log("inserting validation_as");
+        put_u32(cur_pos, cJSON_GetObjectItem(input_json, "validate_asn")->valueint);
+        cur_pos += 4;
+    }
     // optional_data
     byte *optional_data_len_pos = cur_pos;
     cur_pos += 2;
-    log("inserting opt_data");
+    // log("inserting opt_data");
     cur_pos = insert_json_key_int(cur_pos, input_json, "opt_data");
     // address
     put_u16(optional_data_len_pos, (cur_pos - optional_data_len_pos) - 2);
-    log("inserting addresses");
+    if (cJSON_GetObjectItem(input_json, "is_interior")->valueint==1){
+        // cJSON_AR = cJSON_GetObjectItem(input_json, "source_asn")->child;
+        // cJSON *temp = NULL;
+        // temp = cJSON_GetObjectItem(input_json, "neighbor_ases")->child;
+        // while (temp != NULL)
+        // {
+        //     // log("inserting neighbor_ases");
+        //     put_u32(cur_pos, temp->valueint);
+        //     cur_pos += 4;
+        //     temp = temp->next;
+        // }
+        cur_pos = insert_json_key_int(cur_pos, input_json, "neighbor_ases");
+    }
+    else{
+        log("inserting addresses");
     cur_pos = insert_json_key_int(cur_pos, input_json, "addresses");
+    }
+    
     // insert lengths
 
     put_u16(len_pos, (cur_pos - len_pos) - 2);
@@ -375,7 +419,7 @@ char *send_request(char info[])
     char *req_str = NULL;
     // log("send_request: [%s]", info);
     cJSON *info_json = cJSON_Parse(info);
-    log("send_request: [%s]", cJSON_Print(info_json));
+    // log("send_request: [%s]", cJSON_Print(info_json));
     int reply_size = 1024;
     char *reply = (char *)calloc(reply_size, sizeof(char));
     // char *token = NULL;

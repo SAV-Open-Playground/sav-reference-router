@@ -1339,11 +1339,6 @@ bgp_decode_attr(struct bgp_parse_state *s, uint code, uint flags, byte *data, ui
     if (((flags ^ desc->flags) & (BAF_OPTIONAL | BAF_TRANSITIVE)) &&
 	!(desc->flags & BAF_DECODE_FLAGS))
       WITHDRAW("Malformed %s attribute - conflicting flags (%02x)", desc->name, flags);
-
-      // for (size_t i = 0; i < len; i++)
-      // {
-      //   log("attribute data[%d]=%d", i, data[i]);
-      // }
       desc->decode(s, code, flags, data, len, to);
   }
   else /* Unknown attribute */
@@ -2501,7 +2496,6 @@ bgp_get_route_info_char(rte *e, char *result)
   u32 origas;
   result = "";
   bsprintf(result, " (%d", e->attrs->pref);
-  log(L_INFO, "result 2497: %s", result);
   if (e->pflags & BGP_REF_SUPPRESSED)
     strcat(result, "-");
 
