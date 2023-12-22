@@ -287,7 +287,7 @@ int send_rpdp_update(struct bgp_proto *p, cJSON *input_json, struct bgp_conn *co
     cur_pos = insert_json_key_int(cur_pos, input_json, "origin");
     // log("after origin");
     // insert as_path
-    if (cJSON_GetObjectItem(input_json, "is_interior")->valueint==1)
+    if (cJSON_GetObjectItem(input_json, "is_interior")->valueint == 1)
     {
         byte *as_path_start = cur_pos;
         cur_pos += bgp_put_attr_hdr(cur_pos, BA_AS_PATH, 64, cJSON_GetObjectItem(input_json, "as_path_len")->valueint);
@@ -296,7 +296,7 @@ int send_rpdp_update(struct bgp_proto *p, cJSON *input_json, struct bgp_conn *co
         log("as_path_len: %d", (as_path_end - as_path_start));
         log_data(as_path_start, (as_path_end - as_path_start), "as_path");
     }
-    
+
     // insert attr length
     // log("total_path_attr_len_pos: %d", (cur_pos - total_path_attr_len_pos) - 2);
     put_u16(total_path_attr_len_pos, (cur_pos - total_path_attr_len_pos) - 2);
@@ -368,7 +368,8 @@ int send_rpdp_refresh(struct bgp_proto *p, cJSON *input_json, struct bgp_conn *c
     cur_pos = insert_json_key_int(cur_pos, input_json, "opt_data");
     // address
     put_u16(optional_data_len_pos, (cur_pos - optional_data_len_pos) - 2);
-    if (cJSON_GetObjectItem(input_json, "is_interior")->valueint==1){
+    if (cJSON_GetObjectItem(input_json, "is_interior")->valueint == 1)
+    {
         // cJSON_AR = cJSON_GetObjectItem(input_json, "source_asn")->child;
         // cJSON *temp = NULL;
         // temp = cJSON_GetObjectItem(input_json, "neighbor_ases")->child;
@@ -381,11 +382,12 @@ int send_rpdp_refresh(struct bgp_proto *p, cJSON *input_json, struct bgp_conn *c
         // }
         cur_pos = insert_json_key_int(cur_pos, input_json, "neighbor_ases");
     }
-    else{
+    else
+    {
         log("inserting addresses");
-    cur_pos = insert_json_key_int(cur_pos, input_json, "addresses");
+        cur_pos = insert_json_key_int(cur_pos, input_json, "addresses");
     }
-    
+
     // insert lengths
 
     put_u16(len_pos, (cur_pos - len_pos) - 2);
