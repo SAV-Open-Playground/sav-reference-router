@@ -327,45 +327,6 @@ void send_bgp_config(struct bgp_proto *bgp) {
     strcat(local_role,"ERROR");
     break;
   }
-     // get interface;
-    char interface[16]="";
-    int interface_index=-1;
-    if (bgp->cf->iface!=NULL)// check if exist in configuration
-    {
-      strcat(interface, bgp->cf->iface->name);
-    interface_index = bgp->cf->iface->index;
-    }
-    // construct the msg in json string format
-    char temp[1024] = "";
-    bsprintf(temp,"{\"msg_type\":\"bird_bgp_config\",\"msg\":{\
-    \"remote_as\":\"%lu\"\
-    ,\"remote_role\":\"%s\"\
-    ,\"remote_ip\":\"%I\"\
-    ,\"local_as\":\"%lu\"\
-    ,\"local_role\":\"%s\"\
-    ,\"local_ip\":\"%I\"\  
-    ,\"channel\":\"%s\"\
-    ,\"interface_name\":\"%s\"\
-    ,\"interface_index\":\"%u\"\
-    ,\"protocol_name\":\"%s\"\
-    ,\"as4_session\":\"%s\"\
-    ,\"router_id\":\"%d\"\
-    }}",
-    bgp->remote_as
-    ,remote_role
-    ,bgp->cf->remote_ip
-    ,bgp->cf->local_as
-    ,local_role
-    ,bgp->cf->local_ip
-    ,channel
-    ,interface
-    ,interface_index
-    ,bgp->cf->c.name
-    ,bgp->cf->enable_as4>0 ? "True" : "False"
-    ,bgp->local_id
-    );
-    send_to_agent(temp);
-    log("link [%s] meta sent",bgp->cf->c.name);
 }
 
 
@@ -626,35 +587,6 @@ bgp_conn_enter_established_state(struct bgp_conn *conn)
   struct bgp_channel *c;
 
   BGP_TRACE(D_EVENTS, "BGP session established");
-    //  char temp[1024] = "";
-    // bsprintf(temp,"{\"msg_type\":\"bird_bgp_config\",\"msg\":{\
-    // \"remote_as\":\"%lu\"\
-    // ,\"remote_role\":\"%s\"\
-    // ,\"remote_ip\":\"%I\"\
-    // ,\"local_as\":\"%lu\"\
-    // ,\"local_role\":\"%s\"\
-    // ,\"local_ip\":\"%I\"\  
-    // ,\"channel\":\"%s\"\
-    // ,\"interface_name\":\"%s\"\
-    // ,\"interface_index\":\"%u\"\
-    // ,\"protocol_name\":\"%s\"\
-    // ,\"as4_session\":\"%s\"\
-    // ,\"router_id\":\"%d\"\
-    // }}",
-    // bgp->remote_as
-    // ,remote_role
-    // ,bgp->cf->remote_ip
-    // ,bgp->cf->local_as
-    // ,local_role
-    // ,bgp->cf->local_ip
-    // ,channel
-    // ,interface
-    // ,interface_index
-    // ,bgp->cf->c.name
-    // ,bgp->cf->enable_as4>0 ? "True" : "False"
-    // ,bgp->local_id
-    // );
-    // send_to_agent(temp);
   p->last_established = current_time();
   p->stats.fsm_established_transitions++;
 

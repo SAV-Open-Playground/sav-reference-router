@@ -23,7 +23,6 @@
 #include "lib/unaligned.h"
 #include "lib/flowspec.h"
 #include "lib/socket.h"
-#include "lib/http_client.h"
 
 #include "nest/cli.h"
 
@@ -2167,153 +2166,132 @@ bgp_decode_nlri_rpdp4(struct bgp_parse_state *s, byte *pos, uint len, rta *a)
 
 // end of rpdp nlri processing block
 static const struct bgp_af_desc bgp_af_table[] = {
-  {
-    .afi = BGP_AF_IPV4,
-    .net = NET_IP4,
-    .name = "ipv4",
-    .encode_nlri = bgp_encode_nlri_ip4,
-    .decode_nlri = bgp_decode_nlri_ip4,
-    .encode_next_hop = bgp_encode_next_hop_ip,
-    .decode_next_hop = bgp_decode_next_hop_ip,
-    .update_next_hop = bgp_update_next_hop_ip,
-  },
-  {
-    .afi = BGP_AF_IPV4_MC,
-    .net = NET_IP4,
-    .name = "ipv4-mc",
-    .encode_nlri = bgp_encode_nlri_ip4,
-    .decode_nlri = bgp_decode_nlri_ip4,
-    .encode_next_hop = bgp_encode_next_hop_ip,
-    .decode_next_hop = bgp_decode_next_hop_ip,
-    .update_next_hop = bgp_update_next_hop_ip,
-  },
-  {
-    .afi = BGP_AF_IPV4_MPLS,
-    .net = NET_IP4,
-    .mpls = 1,
-    .name = "ipv4-mpls",
-    .encode_nlri = bgp_encode_nlri_ip4,
-    .decode_nlri = bgp_decode_nlri_ip4,
-    .encode_next_hop = bgp_encode_next_hop_ip,
-    .decode_next_hop = bgp_decode_next_hop_ip,
-    .update_next_hop = bgp_update_next_hop_ip,
-  },
-  {
-    .afi = BGP_AF_IPV6,
-    .net = NET_IP6,
-    .name = "ipv6",
-    .encode_nlri = bgp_encode_nlri_ip6,
-    .decode_nlri = bgp_decode_nlri_ip6,
-    .encode_next_hop = bgp_encode_next_hop_ip,
-    .decode_next_hop = bgp_decode_next_hop_ip,
-    .update_next_hop = bgp_update_next_hop_ip,
-  },
-  {
-    .afi = BGP_AF_IPV6_MC,
-    .net = NET_IP6,
-    .name = "ipv6-mc",
-    .encode_nlri = bgp_encode_nlri_ip6,
-    .decode_nlri = bgp_decode_nlri_ip6,
-    .encode_next_hop = bgp_encode_next_hop_ip,
-    .decode_next_hop = bgp_decode_next_hop_ip,
-    .update_next_hop = bgp_update_next_hop_ip,
-  },
-  {
-    .afi = BGP_AF_IPV6_MPLS,
-    .net = NET_IP6,
-    .mpls = 1,
-    .name = "ipv6-mpls",
-    .encode_nlri = bgp_encode_nlri_ip6,
-    .decode_nlri = bgp_decode_nlri_ip6,
-    .encode_next_hop = bgp_encode_next_hop_ip,
-    .decode_next_hop = bgp_decode_next_hop_ip,
-    .update_next_hop = bgp_update_next_hop_ip,
-  },
-  {
-    .afi = BGP_AF_VPN4_MPLS,
-    .net = NET_VPN4,
-    .mpls = 1,
-    .name = "vpn4-mpls",
-    .encode_nlri = bgp_encode_nlri_vpn4,
-    .decode_nlri = bgp_decode_nlri_vpn4,
-    .encode_next_hop = bgp_encode_next_hop_vpn,
-    .decode_next_hop = bgp_decode_next_hop_vpn,
-    .update_next_hop = bgp_update_next_hop_ip,
-  },
-  {
-    .afi = BGP_AF_VPN6_MPLS,
-    .net = NET_VPN6,
-    .mpls = 1,
-    .name = "vpn6-mpls",
-    .encode_nlri = bgp_encode_nlri_vpn6,
-    .decode_nlri = bgp_decode_nlri_vpn6,
-    .encode_next_hop = bgp_encode_next_hop_vpn,
-    .decode_next_hop = bgp_decode_next_hop_vpn,
-    .update_next_hop = bgp_update_next_hop_ip,
-  },
-  {
-    .afi = BGP_AF_VPN4_MC,
-    .net = NET_VPN4,
-    .name = "vpn4-mc",
-    .encode_nlri = bgp_encode_nlri_vpn4,
-    .decode_nlri = bgp_decode_nlri_vpn4,
-    .encode_next_hop = bgp_encode_next_hop_vpn,
-    .decode_next_hop = bgp_decode_next_hop_vpn,
-    .update_next_hop = bgp_update_next_hop_ip,
-  },
-  {
-    .afi = BGP_AF_VPN6_MC,
-    .net = NET_VPN6,
-    .name = "vpn6-mc",
-    .encode_nlri = bgp_encode_nlri_vpn6,
-    .decode_nlri = bgp_decode_nlri_vpn6,
-    .encode_next_hop = bgp_encode_next_hop_vpn,
-    .decode_next_hop = bgp_decode_next_hop_vpn,
-    .update_next_hop = bgp_update_next_hop_ip,
-  },
-  {
-    .afi = BGP_AF_FLOW4,
-    .net = NET_FLOW4,
-    .no_igp = 1,
-    .name = "flow4",
-    .encode_nlri = bgp_encode_nlri_flow4,
-    .decode_nlri = bgp_decode_nlri_flow4,
-    .encode_next_hop = bgp_encode_next_hop_none,
-    .decode_next_hop = bgp_decode_next_hop_none,
-    .update_next_hop = bgp_update_next_hop_none,
-  },
-  {
-    .afi = BGP_AF_FLOW6,
-    .net = NET_FLOW6,
-    .no_igp = 1,
-    .name = "flow6",
-    .encode_nlri = bgp_encode_nlri_flow6,
-    .decode_nlri = bgp_decode_nlri_flow6,
-    .encode_next_hop = bgp_encode_next_hop_none,
-    .decode_next_hop = bgp_decode_next_hop_none,
-    .update_next_hop = bgp_update_next_hop_none,
-  },
     {
-    .afi = BGP_AF_RPDP4,
-    .net = NET_IP4,
-    .name = "rpdp4",
-    .encode_nlri = bgp_encode_nlri_ip4, // encoding is done in http_client.c
-    .decode_nlri = bgp_decode_nlri_rpdp4,
-    .encode_next_hop = bgp_encode_next_hop_ip,
-    .decode_next_hop = bgp_decode_next_hop_ip,
-    .update_next_hop = bgp_update_next_hop_ip,
-  },
-  {
-    .afi = BGP_AF_RPDP6,
-    .net = NET_IP6,
-    .name = "rpdp6",
-    .encode_nlri = bgp_encode_nlri_ip6,
-    .decode_nlri = bgp_decode_nlri_ip6,
-    .encode_next_hop = bgp_encode_next_hop_ip,
-    .decode_next_hop = bgp_decode_next_hop_ip,
-    .update_next_hop = bgp_update_next_hop_ip,
-  }
-};
+        .afi = BGP_AF_IPV4,
+        .net = NET_IP4,
+        .name = "ipv4",
+        .encode_nlri = bgp_encode_nlri_ip4,
+        .decode_nlri = bgp_decode_nlri_ip4,
+        .encode_next_hop = bgp_encode_next_hop_ip,
+        .decode_next_hop = bgp_decode_next_hop_ip,
+        .update_next_hop = bgp_update_next_hop_ip,
+    },
+    {
+        .afi = BGP_AF_IPV4_MC,
+        .net = NET_IP4,
+        .name = "ipv4-mc",
+        .encode_nlri = bgp_encode_nlri_ip4,
+        .decode_nlri = bgp_decode_nlri_ip4,
+        .encode_next_hop = bgp_encode_next_hop_ip,
+        .decode_next_hop = bgp_decode_next_hop_ip,
+        .update_next_hop = bgp_update_next_hop_ip,
+    },
+    {
+        .afi = BGP_AF_IPV4_MPLS,
+        .net = NET_IP4,
+        .mpls = 1,
+        .name = "ipv4-mpls",
+        .encode_nlri = bgp_encode_nlri_ip4,
+        .decode_nlri = bgp_decode_nlri_ip4,
+        .encode_next_hop = bgp_encode_next_hop_ip,
+        .decode_next_hop = bgp_decode_next_hop_ip,
+        .update_next_hop = bgp_update_next_hop_ip,
+    },
+    {
+        .afi = BGP_AF_IPV6,
+        .net = NET_IP6,
+        .name = "ipv6",
+        .encode_nlri = bgp_encode_nlri_ip6,
+        .decode_nlri = bgp_decode_nlri_ip6,
+        .encode_next_hop = bgp_encode_next_hop_ip,
+        .decode_next_hop = bgp_decode_next_hop_ip,
+        .update_next_hop = bgp_update_next_hop_ip,
+    },
+    {
+        .afi = BGP_AF_IPV6_MC,
+        .net = NET_IP6,
+        .name = "ipv6-mc",
+        .encode_nlri = bgp_encode_nlri_ip6,
+        .decode_nlri = bgp_decode_nlri_ip6,
+        .encode_next_hop = bgp_encode_next_hop_ip,
+        .decode_next_hop = bgp_decode_next_hop_ip,
+        .update_next_hop = bgp_update_next_hop_ip,
+    },
+    {
+        .afi = BGP_AF_IPV6_MPLS,
+        .net = NET_IP6,
+        .mpls = 1,
+        .name = "ipv6-mpls",
+        .encode_nlri = bgp_encode_nlri_ip6,
+        .decode_nlri = bgp_decode_nlri_ip6,
+        .encode_next_hop = bgp_encode_next_hop_ip,
+        .decode_next_hop = bgp_decode_next_hop_ip,
+        .update_next_hop = bgp_update_next_hop_ip,
+    },
+    {
+        .afi = BGP_AF_VPN4_MPLS,
+        .net = NET_VPN4,
+        .mpls = 1,
+        .name = "vpn4-mpls",
+        .encode_nlri = bgp_encode_nlri_vpn4,
+        .decode_nlri = bgp_decode_nlri_vpn4,
+        .encode_next_hop = bgp_encode_next_hop_vpn,
+        .decode_next_hop = bgp_decode_next_hop_vpn,
+        .update_next_hop = bgp_update_next_hop_ip,
+    },
+    {
+        .afi = BGP_AF_VPN6_MPLS,
+        .net = NET_VPN6,
+        .mpls = 1,
+        .name = "vpn6-mpls",
+        .encode_nlri = bgp_encode_nlri_vpn6,
+        .decode_nlri = bgp_decode_nlri_vpn6,
+        .encode_next_hop = bgp_encode_next_hop_vpn,
+        .decode_next_hop = bgp_decode_next_hop_vpn,
+        .update_next_hop = bgp_update_next_hop_ip,
+    },
+    {
+        .afi = BGP_AF_VPN4_MC,
+        .net = NET_VPN4,
+        .name = "vpn4-mc",
+        .encode_nlri = bgp_encode_nlri_vpn4,
+        .decode_nlri = bgp_decode_nlri_vpn4,
+        .encode_next_hop = bgp_encode_next_hop_vpn,
+        .decode_next_hop = bgp_decode_next_hop_vpn,
+        .update_next_hop = bgp_update_next_hop_ip,
+    },
+    {
+        .afi = BGP_AF_VPN6_MC,
+        .net = NET_VPN6,
+        .name = "vpn6-mc",
+        .encode_nlri = bgp_encode_nlri_vpn6,
+        .decode_nlri = bgp_decode_nlri_vpn6,
+        .encode_next_hop = bgp_encode_next_hop_vpn,
+        .decode_next_hop = bgp_decode_next_hop_vpn,
+        .update_next_hop = bgp_update_next_hop_ip,
+    },
+    {
+        .afi = BGP_AF_FLOW4,
+        .net = NET_FLOW4,
+        .no_igp = 1,
+        .name = "flow4",
+        .encode_nlri = bgp_encode_nlri_flow4,
+        .decode_nlri = bgp_decode_nlri_flow4,
+        .encode_next_hop = bgp_encode_next_hop_none,
+        .decode_next_hop = bgp_decode_next_hop_none,
+        .update_next_hop = bgp_update_next_hop_none,
+    },
+    {
+        .afi = BGP_AF_FLOW6,
+        .net = NET_FLOW6,
+        .no_igp = 1,
+        .name = "flow6",
+        .encode_nlri = bgp_encode_nlri_flow6,
+        .decode_nlri = bgp_decode_nlri_flow6,
+        .encode_next_hop = bgp_encode_next_hop_none,
+        .decode_next_hop = bgp_decode_next_hop_none,
+        .update_next_hop = bgp_update_next_hop_none,
+    }};
 
 const struct bgp_af_desc *
 bgp_get_af_desc(u32 afi)
@@ -2685,17 +2663,16 @@ bgp_rx_update(struct bgp_conn *conn, byte *pkt, uint len)
 
   /* Initialize parse state */
   struct bgp_parse_state s = {
-    .proto = p,
-    .pool = tmp_linpool,
-    .as4_session = p->as4_session,
-    .incoming_interface = conn->sk->lifindex, /* insert the incoming interface info to state*/
-    .send_to_sav_app_bird = 0,
-    .as_path = "",
-    .sav_origin = "",
-    .routes = "",
-    .sav_scope = "",
-    .sav_nlri = ""
-    // .incoming_interface = conn->sk->iface,
+      .proto = p,
+      .pool = tmp_linpool,
+      .as4_session = p->as4_session,
+      .incoming_interface = conn->sk->lifindex, /* insert the incoming interface info to state*/
+      .as_path = "",
+      .sav_origin = "",
+      .routes = "",
+      .sav_scope = "",
+      .sav_nlri = ""
+      // .incoming_interface = conn->sk->iface,
   };
   /* Parse error handler */
   if (setjmp(s.err_jmpbuf))
@@ -2738,13 +2715,11 @@ bgp_rx_update(struct bgp_conn *conn, byte *pkt, uint len)
   s.ip_reach_len = len - pos; /*length of routes*/
   s.ip_reach_nlri = pkt + pos;
 
-  log("\nip_unreach_len: %d\nip_reach_len: %d",s.ip_unreach_len,s.ip_reach_len);
   if (s.attr_len)
     ea = bgp_decode_attrs(&s, s.attrs, s.attr_len); /*Processing Attributes,s.mp_reach_len is set here*/
   else
     ea = NULL;
-    // mp_reach_len is set after attributes decoded
-  log("\nmp_reach_len: %d\nmp_unreach_len: %d",   s.mp_reach_len,s.mp_unreach_len);
+  // mp_reach_len is set after attributes decoded
   /* Check for End-of-RIB marker */
   if (!s.attr_len && !s.ip_unreach_len && !s.ip_reach_len)
   { bgp_rx_end_mark(&s, BGP_AF_IPV4); goto done; }/*Noting to process*/
@@ -2770,37 +2745,7 @@ bgp_rx_update(struct bgp_conn *conn, byte *pkt, uint len)
     bgp_decode_nlri(&s, s.mp_reach_af, s.mp_reach_nlri, s.mp_reach_len,
 		    ea, s.mp_next_hop_data, s.mp_next_hop_len);
 done:
-  log("BGP UPDATE PROCESSING FINISHED");
   rta_free(s.cached_rta);
-  lp_restore(tmp_linpool, &tmpp); /*restore local state*/
-  if (s.send_to_sav_app_bird==1)
-  {
-    s.routes[strlen(s.routes)-1] = '\0'; // removing ending comma
-    char temp[1024] = "";
-    bsprintf(temp, "{\"msg_type\":\"bgp_update\"\n,\"msg\":{\n\
-      \"neighbor_as\":\"%lu\"\n\
-    ,\"interface_name\":\"%s\"\n\
-    ,\"interface_index\":\"%u\"\n\
-    ,\"protocol_name\":\"%s\"\n\
-    ,\"as_path\":\"%s\"\n\
-    ,\"sav_origin\":\"%s\"\n\
-    ,\"routes\":\"%s\"\n\
-    ,\"sav_scope\":\"%s\"\n\
-    ,\"sav_nlri\":\"%s\"\
-    }}",
-    conn->bgp->remote_as,
-    conn->bgp->cf->iface->name,
-    s.incoming_interface,
-    conn->bgp->cf->c.name,
-    s.as_path,
-    s.sav_origin,
-    s.routes,
-    s.sav_scope,
-    s.sav_nlri
-    );
-    send_to_agent(temp);
-    log("Sent to SavAgent:%s", temp);
-  }
   return;
 }
 static uint

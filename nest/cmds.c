@@ -15,7 +15,6 @@
 #include "lib/string.h"
 #include "lib/resource.h"
 #include "filter/filter.h"
-#include <lib/http_client.h>
 
 extern int shutting_down;
 extern int configuring;
@@ -43,13 +42,6 @@ cmd_show_status(void)
     cli_msg(13, "Reconfiguration in progress");
   else
     cli_msg(13, "Daemon is up and running");
-}
-void
-call_agent(void)
-{
- log("call_agent");
- cli_msg(0, "");
- send_to_agent("{\"msg_type\":\"request_cmd\",\"msg\":\"\"}");
 }
 
 void

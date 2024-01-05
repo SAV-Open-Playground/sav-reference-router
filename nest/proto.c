@@ -21,7 +21,6 @@
 #include "nest/cli.h"
 #include "filter/filter.h"
 #include "filter/f-inst.h"
-#include "lib/http_client.h"
 
 pool *proto_pool;
 list STATIC_LIST_INIT(proto_list);
@@ -85,20 +84,6 @@ proto_log_state_change(struct proto *p)
     {
       p->last_state_name_announced = name;
       PD(p, "Protocol state changed to %s", proto_state_name(p));
-      char temp_msg[1024] = "";
-      strcat(temp_msg, "{\"msg_type\":\"link_state_change\",\"protocol_name\":\"");
-      strcat(temp_msg, p->name);
-      strcat(temp_msg, "\",\"msg\":\"");
-      if (strcmp(name, "up") == 0){
-        strcat(temp_msg,"up\"}");
-        send_to_agent(temp_msg);
-        log("link [%s] %s sent",p->name,name);
-      }
-      else if  (strcmp(name, "down") == 0){
-        strcat(temp_msg,"down\"}");
-        send_to_agent(temp_msg);
-        log("link [%s] %s sent",p->name,name);
-    }
   }
   else
     p->last_state_name_announced = NULL;
