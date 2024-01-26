@@ -497,6 +497,7 @@ struct bgp_parse_state {
   char routes[1024]; // list of modified routes
   char temp_u8[4];
   int is_rpdp;
+  int is_rpdp_add; // 1 = add,0==del,-1 = none
 };
 
 #define BGP_PORT		179

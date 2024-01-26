@@ -2122,20 +2122,20 @@ bgp_decode_nlri_flow6(struct bgp_parse_state *s, byte *pos, uint len, rta *a)
         bgp_rte_update(s, n, path_id, a);
     }
 }
-static void
-bgp_decode_rpdp4_asn(char target[], byte *pos, int is_as4)
-{
-    if (is_as4)
-    {
-        bsprintf(target, "%u", get_u32(pos));
-        pos += 4;
-    }
-    else
-    {
-        bsprintf(target, "%u", get_u16(pos));
-        pos += 2;
-    }
-}
+// static void
+// bgp_decode_rpdp4_asn(char target[], byte *pos, int is_as4)
+// {
+//     if (is_as4)
+//     {
+//         bsprintf(target, "%u", get_u32(pos));
+//         pos += 4;
+//     }
+//     else
+//     {
+//         bsprintf(target, "%u", get_u16(pos));
+//         pos += 2;
+//     }
+// }
 static void log_data(byte *pos, uint len, char *name)
 {
     byte *this_pos = pos;
@@ -2149,97 +2149,86 @@ static void log_data(byte *pos, uint len, char *name)
     return;
 }
 
-static void
-bgp_decode_nlri_rpdp4(struct bgp_parse_state *s, byte *pos, uint len, rta *a)
-/* Although named as nlri decode, we decode other staff here.*/
-// UPDATE-SPA
-{
-    byte *end_pos = pos + len;
-    log_data(pos, len, "bgp_decode_nlri_rpdp4");
-    // decode sav_origin
-    if (s->as4_session)
-    {
-        bsprintf(s->sav_origin, "%u", get_u32(pos));
-        pos += 4;
-    }
-    else
-    {
-        bsprintf(s->sav_origin, "%u", get_u16(pos));
-        pos += 2;
-    }
-    // log("s->sav_origin: [%s]", s->sav_origin);
+// static void
+// {
+//     byte *end_pos = pos + len;
+//     log_data(pos, len, "bgp_decode_nlri_rpdp4");
+//     // decode sav_origin
+//     if (s->as4_session)
+//     {
+//         bsprintf(s->sav_origin, "%u", get_u32(pos));
+//         pos += 4;
+//     }
+//     else
+//     {
+//         bsprintf(s->sav_origin, "%u", get_u16(pos));
+//         pos += 2;
+//     }
+//     log("s->sav_origin: [%s]", s->sav_origin);
 
-    // decode sav_scope
-    uint scope_path_num = get_u8(pos);
-    // log("scope_path_num: %d", scope_path_num);
-    pos += 1;
+//     // decode sav_scope
+//     uint scope_path_num = get_u8(pos);
+//     // log("scope_path_num: %d", scope_path_num);
+//     pos += 1;
 
-    char result_str[1024] = "";
-    char temp_str[16] = "";
-    bsprintf(result_str, "%u,", scope_path_num);
-    for (uint i = 0; i < scope_path_num; i++)
-    {
-        uint path_as_num = get_u8(pos);
-        pos += 1;
-        bsprintf(temp_str, "%u,", path_as_num);
-        // log("path_as_num: %d", path_as_num);
-        strcat(result_str, temp_str);
-        for (uint j = 0; j < path_as_num; j++)
-        {
-            bsprintf(temp_str, "");
-            if (s->as4_session)
-            {
-                bsprintf(temp_str, "%u,", get_u32(pos));
-                pos += 4;
-            }
-            else
-            {
-                bsprintf(temp_str, "%u,", get_u16(pos));
-                pos += 2;
-            }
-            strcat(result_str, temp_str);
-        }
-    }
-    result_str[strlen(result_str) - 1] = '\0';
-    strcat(s->sav_scope, result_str);
-    // log("s->sav_scope: [%s]", s->sav_scope);
+//     char result_str[1024] = "";
+//     char temp_str[16] = "";
+//     bsprintf(result_str, "%u,", scope_path_num);
+//     for (uint i = 0; i < scope_path_num; i++)
+//     {
+//         uint path_as_num = get_u8(pos);
+//         pos += 1;
+//         bsprintf(temp_str, "%u,", path_as_num);
+//         // log("path_as_num: %d", path_as_num);
+//         strcat(result_str, temp_str);
+//         for (uint j = 0; j < path_as_num; j++)
+//         {
+//             bsprintf(temp_str, "");
+//             if (s->as4_session)
+//             {
+//                 bsprintf(temp_str, "%u,", get_u32(pos));
+//                 pos += 4;
+//             }
+//             else
+//             {
+//                 bsprintf(temp_str, "%u,", get_u16(pos));
+//                 pos += 2;
+//             }
+//             strcat(result_str, temp_str);
+//         }
+//     }
+//     result_str[strlen(result_str) - 1] = '\0';
+//     strcat(s->sav_scope, result_str);
+//     // log("s->sav_scope: [%s]", s->sav_scope);
 
-    // the rest is nlri
-    bsprintf(result_str, "");
-    bsprintf(temp_str, "");
-    while (pos < end_pos)
-    {
-        uint prefix_len = get_u8(pos);
-        bsprintf(temp_str, "%u,", prefix_len);
-        strcat(result_str, temp_str);
-        pos += 1;
-        for (uint i = 0; i < (prefix_len + 7) / 8; i++)
-        {
-            bsprintf(temp_str, "");
-            bsprintf(temp_str, "%u,", get_u8(pos));
-            strcat(result_str, temp_str);
-            pos += 1;
-        }
-    }
-    result_str[strlen(result_str) - 1] = '\0';
-    strcat(s->spa_add, result_str);
-    s->is_rpdp = 1;
-    // log("s->sav_nlri: [%s]", s->sav_nlri);
-    return;
-}
+//     // the rest is nlri
+//     bsprintf(result_str, "");
+//     bsprintf(temp_str, "");
+//     while (pos < end_pos)
+//     {
+//         uint prefix_len = get_u8(pos);
+//         bsprintf(temp_str, "%u,", prefix_len);
+//         strcat(result_str, temp_str);
+//         pos += 1;
+//         for (uint i = 0; i < (prefix_len + 7) / 8; i++)
+//         {
+//             bsprintf(temp_str, "");
+//             bsprintf(temp_str, "%u,", get_u8(pos));
+//             strcat(result_str, temp_str);
+//             pos += 1;
+//         }
+//     }
+//     result_str[strlen(result_str) - 1] = '\0';
+//     strcat(s->spa_add, result_str);
+//     s->is_rpdp = 1;
+//     // log("s->sav_nlri: [%s]", s->sav_nlri);
+//     return;
+// }
 
 static void
-bgp_decode_nlri_rpdp6(struct bgp_parse_state *s, byte *pos, uint len, rta *a)
+bgp_decode_nlri_rpdp(struct bgp_parse_state *s, byte *pos, uint len, rta *a)
 {
-    // log_data(pos, len, "bgp_decode_nlri_rpdp6");
-    while (len)
-    {
-        bsprintf(s->temp_u8, "");
-        bsprintf(s->temp_u8, "%u,", get_u8(pos));
-        strcat(s->spa_add, s->temp_u8);
-        ADVANCE(pos, len, 1);
-    }
-    s->spa_add[strlen(s->spa_add) - 1] = '\0';
+    // for a and 6 the actual processing is done by sav-agent
     s->is_rpdp = 1;
 }
 
@@ -2377,7 +2366,7 @@ static const struct bgp_af_desc bgp_af_table[] = {
         .name = "rpdp4",
         // .encode_nlri = bgp_encode_nlri_rpdp,
         .encode_nlri = bgp_encode_nlri_ip4, // encoding is done in http_client.c
-        .decode_nlri = bgp_decode_nlri_rpdp6,
+        .decode_nlri = bgp_decode_nlri_rpdp,
         .encode_next_hop = bgp_encode_next_hop_ip,
         .decode_next_hop = bgp_decode_next_hop_ip,
         .update_next_hop = bgp_update_next_hop_ip,
@@ -2387,8 +2376,8 @@ static const struct bgp_af_desc bgp_af_table[] = {
         .net = NET_IP6,
         .name = "rpdp6",
         // .encode_nlri = bgp_encode_nlri_rpdp,
-        .encode_nlri = bgp_encode_nlri_ip6,
-        .decode_nlri = bgp_decode_nlri_rpdp6,
+        .encode_nlri = bgp_encode_nlri_ip6, // encoding is done in http_client.c
+        .decode_nlri = bgp_decode_nlri_rpdp,
         .encode_next_hop = bgp_encode_next_hop_ip,
         .decode_next_hop = bgp_decode_next_hop_ip,
         .update_next_hop = bgp_update_next_hop_ip,
@@ -2748,7 +2737,7 @@ bgp_rx_update(struct bgp_conn *conn, byte *pkt, uint len)
     BGP_TRACE_RL(&rl_rcv_update, D_PACKETS, "Got UPDATE");
     p->last_rx_update = current_time();
     p->stats.rx_updates++;
-    // log_data(pkt, len, "bgp_rx_update");
+
     /* Workaround for some BGP implementations that skip initial KEEPALIVE */
     if (conn->state == BS_OPENCONFIRM)
         bgp_conn_enter_established_state(conn);
@@ -2821,11 +2810,14 @@ bgp_rx_update(struct bgp_conn *conn, byte *pkt, uint len)
     s.ip_reach_len = len - pos; /*length of routes*/
     s.ip_reach_nlri = pkt + pos;
     // log_data(s.attrs,s.attr_len,"s.attr");
-    // log("\nip_unreach_len: %d\nip_reach_len: %d", s.ip_unreach_len, s.ip_reach_len);
+    log("\nip_unreach_len: %d\nip_reach_len: %d", s.ip_unreach_len, s.ip_reach_len);
     if (s.attr_len)
         ea = bgp_decode_attrs(&s, s.attrs, s.attr_len); /*Processing Attributes,s.mp_reach_len is set here*/
     else
         ea = NULL;
+    if (s.is_rpdp == 1)
+        goto done;
+    // skip the rest if it is rpdp
     // log("bgp_decode_attrs done");
     // mp_reach_len is set after attributes decoded
     // log("\nmp_reach_len: %d\nmp_unreach_len: %d", s.mp_reach_len, s.mp_unreach_len);
@@ -2859,7 +2851,7 @@ bgp_rx_update(struct bgp_conn *conn, byte *pkt, uint len)
         bgp_decode_nlri(&s, s.mp_reach_af, s.mp_reach_nlri, s.mp_reach_len,
                         ea, s.mp_next_hop_data, s.mp_next_hop_len);
 done:
-    log("bgp_rx_update done %u %u", s.mp_reach_af, s.mp_unreach_af);
+    // log("bgp_rx_update done %u %u", s.mp_reach_af, s.mp_unreach_af);
     rta_free(s.cached_rta);
     lp_restore(tmp_linpool, &tmpp); /*restore local state*/
     // if (s.send_to_sav_app_bird == 1)
@@ -2874,21 +2866,51 @@ done:
            ,\"channels\":\"",
                      conn->bgp->cf->c.name);
         else
+        {
+            // log_data(s.mp_reach_nlri, s.mp_reach_len, "s.mp_reach_nlri");
+            // log_data(s.mp_unreach_nlri, s.mp_unreach_len, "s.mp_unreach_nlri");
+            int len = s.mp_reach_len;
+            bsprintf(s.spa_add, "\0");
+            while (len>0)
+            {
+                bsprintf(s.temp_u8, "\0");
+                bsprintf(s.temp_u8, "%u,", get_u8(s.mp_reach_nlri));
+                strcat(s.spa_add, s.temp_u8);
+                ADVANCE(s.mp_reach_nlri, len, 1);
+            }
+            pos = 0;
+            len = s.mp_unreach_len;
+            while (len)
+            {
+                bsprintf(s.temp_u8, "\0");
+                bsprintf(s.temp_u8, "%u,", get_u8(s.mp_unreach_nlri));
+                strcat(s.spa_del, s.temp_u8);
+                ADVANCE(pos, len, 1);
+            }
+            if (strlen(s.spa_add) > 0)
+                s.spa_add[strlen(s.spa_add) - 1] = '\0';
+            if (strlen(s.spa_del) > 0)
+                s.spa_del[strlen(s.spa_del) - 1] = '\0';
             bsprintf(temp, "{\"msg_type\":\"rpdp_update\"\n,\"msg\":{\n\
         \"protocol_name\":\"%s\"\n\
         ,\"sav_origin\":\"%s\"\n\
         ,\"routes\":\"%s\"\n\
         ,\"sav_scope\":\"%s\"\n\
-        ,\"spa_add\":[%s]\
-        ,\"spa_del\":[%s]\
+        ,\"as_path\":\"%s\"\n\
+        ,\"spa_add\":[%s]\n\
+        ,\"spa_del\":[%s]\n\
         ,\"channels\":\"",
 
                      conn->bgp->cf->c.name,
                      s.sav_origin,
                      s.routes,
                      s.sav_scope,
+                     s.as_path,
                      s.spa_add,
                      s.spa_del);
+            log("temp: [%s]", temp);
+            // log_data(pkt, len, "bgp_rx_rpdp_update");
+        }
         struct bgp_channel *c;
         BGP_WALK_CHANNELS(conn->bgp, c)
         {
@@ -2914,7 +2936,7 @@ done:
             log("SAV UPDATE PROCESSING FINISHED at %ld", (tv.tv_usec / 1000) + (tv.tv_sec * 1000));
         }
         // log("msg ready");
-        // log(temp);
+        // log("temp: [%s]", temp);
         send_to_agent(temp);
         log("BGP UPDATE SENT TO AGENT");
     }
@@ -3116,7 +3138,7 @@ static process_spd(struct bgp_proto *p, byte *pkt, uint len)
     len -= opt_len;
     if (is_interior == 1)
     {
-        insert_int_array(ret, cur_pos, len, "peer_neighor_asns");
+        insert_int_array(ret, cur_pos, len, "peer_neighbor_asns");
     }
     else
         insert_int_array(ret, cur_pos, len, "addresses");

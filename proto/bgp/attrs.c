@@ -65,7 +65,18 @@
  * format - Optional hook that converts eattr to textual representation.
  */
 
-
+static void log_data(byte *pos, uint len, char *name)
+{
+    byte *this_pos = pos;
+    int count = 0;
+    while (count < len)
+    {
+        log("%s [%d]: %d", name, count, get_u8(this_pos));
+        this_pos += 1;
+        count += 1;
+    }
+    return;
+}
 struct bgp_attr_desc {
   const char *name;
   uint type;
@@ -1212,7 +1223,7 @@ bgp_export_attr(struct bgp_export_state *s, eattr *a, ea_list *to)
  * The bgp_export_attrs() function takes a list of attributes and merges it to
  * one newly allocated and sorted segment. Attributes are validated and
  * normalized by type-specific export hooks and attribute flags are updated.
- * Some attributes may be eliminated (e.g. unknown non-tranitive attributes, or
+ * Some attributes may be eliminated (e.g. unknown non-transitive attributes, or
  * empty community sets).
  *
  * Result: one sorted attribute list segment, or NULL if attributes are unsuitable.
@@ -1368,6 +1379,7 @@ bgp_decode_attrs(struct bgp_parse_state *s, byte *data, uint len)
   uint code, flags, alen;
   byte *pos = data;
   /* Parse the attributes */
+  // log_data( data, len,"BGP: Received attributes");
   while (len)
   {
     alen = 0;
@@ -1393,9 +1405,13 @@ bgp_decode_attrs(struct bgp_parse_state *s, byte *data, uint len)
       alen = *pos;
       ADVANCE(pos, len, 1);
     }
-
     if (alen > len)
+    {
+      log("attribute length error, got alen=%d, total_len=%d", alen,len);
       goto framing_error;
+      }
+    // log("==========");
+    // log_data( pos, alen,"now decoding attr");
     bgp_decode_attr(s, code, flags, pos, alen, &attrs); /* processing one attribute value*/
     ADVANCE(pos, len, alen);
   }
@@ -2422,6 +2438,7 @@ bgp_process_as4_attrs(ea_list **attrs, struct linpool *pool)
     /* Merge AS_PATH and AS4_PATH */
     struct adata *apc = as_path_cut(pool, p2->u.ptr, p2_len - p4_len);
     p2->u.ptr = as_path_merge(pool, apc, p4->u.ptr);
+
   }
 }
 
