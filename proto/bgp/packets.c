@@ -2860,12 +2860,12 @@ done:
         log("sending to agent");
         s.routes[strlen(s.routes) - 1] = '\0'; // removing ending comma
         char temp[2048] = "";
-        if (s.is_rpdp == 0)
-            bsprintf(temp, "{\"msg_type\":\"bgp_update\"\n,\"msg\":{\n\
-           \"protocol_name\":\"%s\"\n\
-           ,\"channels\":\"",
-                     conn->bgp->cf->c.name);
-        else
+        if (s.is_rpdp == 1)
+        //     bsprintf(temp, "{\"msg_type\":\"bgp_update\"\n,\"msg\":{\n\
+        //    \"protocol_name\":\"%s\"\n\
+        //    ,\"channels\":\"",
+        //              conn->bgp->cf->c.name);
+        // else
         {
             // log_data(s.mp_reach_nlri, s.mp_reach_len, "s.mp_reach_nlri");
             // log_data(s.mp_unreach_nlri, s.mp_unreach_len, "s.mp_unreach_nlri");
@@ -2910,7 +2910,7 @@ done:
                      s.spa_del);
             log("temp: [%s]", temp);
             // log_data(pkt, len, "bgp_rx_rpdp_update");
-        }
+        
         struct bgp_channel *c;
         BGP_WALK_CHANNELS(conn->bgp, c)
         {
@@ -2939,6 +2939,7 @@ done:
         // log("temp: [%s]", temp);
         send_to_agent(temp);
         log("BGP UPDATE SENT TO AGENT");
+        }
     }
     else
     {
